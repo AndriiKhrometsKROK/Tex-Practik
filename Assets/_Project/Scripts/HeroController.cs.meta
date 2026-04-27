@@ -1,0 +1,22 @@
+fileFormatVersion: 2
+guid: 29151bfc811d21940a972c79a6c2268a
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - spheresText: {instanceID: 0}
+  - spell_QQQ: {fileID: 368517598067420769, guid: e78832a33bd33f840ad8e4c187bdfe0d, type: 3}
+  - spell_QQW: {fileID: 368517598067420769, guid: e78832a33bd33f840ad8e4c187bdfe0d, type: 3}
+  - spell_QQE: {fileID: 368517598067420769, guid: e78832a33bd33f840ad8e4c187bdfe0d, type: 3}
+  - spell_WWW: {fileID: 368517598067420769, guid: e78832a33bd33f840ad8e4c187bdfe0d, type: 3}
+  - spell_QWW: {fileID: 368517598067420769, guid: e78832a33bd33f840ad8e4c187bdfe0d, type: 3}
+  - spell_WWE: {fileID: 368517598067420769, guid: e78832a33bd33f840ad8e4c187bdfe0d, type: 3}
+  - spell_EEE: {fileID: 368517598067420769, guid: e78832a33bd33f840ad8e4c187bdfe0d, type: 3}
+  - spell_QEE: {fileID: 368517598067420769, guid: e78832a33bd33f840ad8e4c187bdfe0d, type: 3}
+  - spell_WEE: {fileID: 368517598067420769, guid: e78832a33bd33f840ad8e4c187bdfe0d, type: 3}
+  - spell_QWE: {fileID: 368517598067420769, guid: e78832a33bd33f840ad8e4c187bdfe0d, type: 3}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
