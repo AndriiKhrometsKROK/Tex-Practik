@@ -56,10 +56,18 @@ public class EnemyAI : MonoBehaviour
 
     private void Die()
     {
-        // Тут можна додати золото гравцю
-        // PlayerManager.AddGold(data.goldReward);
-        Destroy(gameObject);
+    // 1. Телефонуємо в банк (GameManager.Instance)
+    // 2. Просимо додати золото (AddGold)
+    // 3. Беремо кількість золота з налаштувань цього ворога (data.goldReward)
+        if (GameManager.Instance != null && data != null)
+        {
+            GameManager.Instance.AddGold(data.goldReward);
+        }
+
+    // Видаляємо ворога зі сцени
+    Destroy(gameObject);
     }
+    
 
     void OnTriggerStay2D(Collider2D other)
     {

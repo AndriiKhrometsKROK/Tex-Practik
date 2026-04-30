@@ -2,14 +2,52 @@ using UnityEngine;
 
 public class Projectile : MonoBehaviour
 {
-    public float speed = 20f;
+    public float speed = 10f;
+    private Transform _target;
+    private TowerData _sourceData;
+
+    public void Setup(Transform target, TowerData data)
+    {
+        _target = target;
+        _sourceData = data;
+    }
 
     void Update()
     {
-        // Летит всегда "вперед" (вправо для спрайта)
-        transform.position += transform.right * speed * Time.deltaTime;
+        if (_target == null)
+        {
+            Destroy(gameObject);
+            return;
+        }
 
-        // Самоуничтожение через 3 секунды, чтобы не забивать память
-        Destroy(gameObject, 3f);
+        // РЎР°РјРѕРЅР°РІРµРґРµРЅРЅСЏ РЅР° РІРѕСЂРѕРіР°
+        Vector3 dir = _target.position - transform.position;
+        transform.position += dir.normalized * speed * Time.deltaTime;
+
+        if (Vector3.Distance(transform.position, _target.position) < 0.2f)
+        {
+            ApplyDamage(_target.gameObject);
+            Destroy(gameObject);
+        }
+    }
+
+    void ApplyDamage(GameObject enemy)
+    {
+        EnemyAI ai = enemy.GetComponent<EnemyAI>();
+        if (ai == null || _sourceData == null) return;
+
+        float damage = Random.Range(_sourceData.minDamage, _sourceData.maxDamage);
+
+        // Р›РѕРіС–РєР° РєСЂРёС‚Р° (Archer)
+        if (Random.value < _sourceData.critChance) damage *= 2;
+
+        // РќР°РЅРµСЃРµРЅРЅСЏ СѓСЂРѕРЅСѓ
+        ai.TakeDamage(damage, _sourceData.isMagic);
+
+        // РўСѓС‚ РјРѕР¶РЅР° РґРѕРґР°С‚Рё Р»РѕРіС–РєСѓ СѓРїРѕРІС–Р»СЊРЅРµРЅРЅСЏ Р°Р±Рѕ AOE РІРёР±СѓС…Сѓ
+        if (_sourceData.aoeRadius > 0)
+        {
+            // Р›РѕРіС–РєР° РІРёР±СѓС…Сѓ РґР»СЏ Fire Tower
+        }
     }
 }

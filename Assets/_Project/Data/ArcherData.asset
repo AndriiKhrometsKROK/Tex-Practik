@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6f9a4cbd8ff5a0a458cb8e8cd8341498, type: 3}
+  m_Name: ArcherData
+  m_EditorClassIdentifier: 
+  towerName: Archer Tower
+  cost: 150
+  attackRadius: 8
+  fireRate: 0.6
+  projectilePrefab: {fileID: 692415703611947310, guid: c89f43a5fd9190d48b0806fed5bfa1cc, type: 3}
+  minDamage: 5
+  maxDamage: 8
+  isMagic: 0
+  critChance: 0.2
+  slowFactor: 0
+  aoeRadius: 0
+  dotDamage: 0
+  armorShred: 0
+  stunChance: 0
