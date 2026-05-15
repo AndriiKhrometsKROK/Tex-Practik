@@ -3,6 +3,10 @@ using UnityEngine;
 [CreateAssetMenu(fileName = "NewUnitData", menuName = "TD/Unit Data")]
 public class UnitData : ScriptableObject
 {
+    [Header("Visual Settings")]
+    [Tooltip("Префаб із візуалом (SpriteRenderer, Animator тощо) для цього юніта")]
+    public GameObject unitPrefab;
+
     [Header("Basic Stats")]
     public string unitName;
     public float maxHp;

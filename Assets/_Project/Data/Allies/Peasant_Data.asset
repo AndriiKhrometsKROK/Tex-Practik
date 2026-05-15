@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 61d5e69f7de8f0442b8f5da96526e0b1, type: 3}
+  m_Name: Peasant_Data
+  m_EditorClassIdentifier: 
+  unitPrefab: {fileID: 9040331133811271552, guid: a03729a285ee9b04e8f326e7d2747032, type: 3}
+  unitName: "\u0421\u0435\u043B\u044F\u043D\u0438\u043D"
+  maxHp: 50
+  moveSpeed: 1.5
+  goldReward: 0
+  minDamage: 3
+  maxDamage: 6
+  attackRate: 1.2
+  towerDamage: 1
+  armor: 0
+  magicResistance: 0
