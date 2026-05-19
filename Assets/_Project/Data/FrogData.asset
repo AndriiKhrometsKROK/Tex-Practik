@@ -17,6 +17,7 @@ MonoBehaviour:
   attackRadius: 5
   fireRate: 2
   projectilePrefab: {fileID: 0}
+  towerPrefab: {fileID: 5831384468341345689, guid: aadff5eaf47136148ab989ca3c24c4bc, type: 3}
   minDamage: 30
   maxDamage: 50
   isMagic: 0
