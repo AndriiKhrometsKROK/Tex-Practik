@@ -6,7 +6,10 @@ public class EnemyAI : MonoBehaviour
     
     private float _currentHp;
     private float _nextAttackTime;
-    private Transform _player;
+    
+    // Змінні для системи Waypoints
+    private Transform _targetWaypoint;
+    private int _waypointIndex = 0;
 
     void Start()
     {
@@ -20,29 +23,71 @@ public class EnemyAI : MonoBehaviour
             _currentHp = 100f; // Запобіжник
         }
 
-        GameObject p = GameObject.FindWithTag("Player");
-        if (p != null) _player = p.transform;
+        // Встановлюємо першу точку маршруту як ціль
+        if (Waypoints.points != null && Waypoints.points.Length > 0)
+        {
+            _targetWaypoint = Waypoints.points[0];
+        }
+        else
+        {
+            Debug.LogError("Маршрут не знайдено! Додай об'єкт зі скриптом Waypoints на сцену.");
+        }
     }
 
     void Update()
     {
-        if (_player == null || data == null) return;
-        transform.position = Vector2.MoveTowards(transform.position, _player.position, data.moveSpeed * Time.deltaTime);
+        if (data == null) return;
+        
+        MoveAlongPath();
     }
 
-    // Додали параметр isMagicDamage, щоб відрізняти тип атаки гравця
+    private void MoveAlongPath()
+    {
+        if (_targetWaypoint == null) return;
+
+        // Рухаємось до поточної цільової точки
+        transform.position = Vector2.MoveTowards(transform.position, _targetWaypoint.position, data.moveSpeed * Time.deltaTime);
+
+        // Якщо ворог дійшов до точки (з мінімальною похибкою 0.1f)
+        if (Vector2.Distance(transform.position, _targetWaypoint.position) <= 0.1f)
+        {
+            GetNextWaypoint();
+        }
+    }
+
+    private void GetNextWaypoint()
+    {
+        // Якщо дійшли до останньої точки маршруту (тобто до бази гравця)
+        if (_waypointIndex >= Waypoints.points.Length - 1)
+        {
+            ReachBase();
+            return;
+        }
+
+        // Перемикаємось на наступну точку
+        _waypointIndex++;
+        _targetWaypoint = Waypoints.points[_waypointIndex];
+    }
+
+    private void ReachBase()
+    {
+        // ТУТ В МАЙБУТНЬОМУ МОЖНА ДОДАТИ: GameManager.Instance.TakeLife(1);
+        Debug.Log(gameObject.name + " дійшов до бази!");
+        Destroy(gameObject); // Знищуємо ворога, бо він пройшов маршрут
+    }
+
     public void TakeDamage(float amount, bool isMagicDamage = false)
     {
         float finalDamage = amount;
 
         if (isMagicDamage)
         {
-            // Магічний спротив (зменшує шкоду у відсотках)
+            // Магічний спротив
             finalDamage -= finalDamage * data.magicResistance; 
         }
         else
         {
-            // Броня (просто віднімає одиниці шкоди, але не менше 1)
+            // Броня
             finalDamage = Mathf.Max(1f, finalDamage - data.armor);
         }
 
@@ -56,39 +101,24 @@ public class EnemyAI : MonoBehaviour
 
     private void Die()
     {
-    // 1. Телефонуємо в банк (GameManager.Instance)
-    // 2. Просимо додати золото (AddGold)
-    // 3. Беремо кількість золота з налаштувань цього ворога (data.goldReward)
         if (GameManager.Instance != null && data != null)
         {
             GameManager.Instance.AddGold(data.goldReward);
         }
 
-    // Видаляємо ворога зі сцени
-    Destroy(gameObject);
+        Destroy(gameObject);
     }
     
-
     void OnTriggerStay2D(Collider2D other)
     {
         if (data == null) return;
 
+        // Залишив логіку нанесення шкоди, якщо ворог стикається з гравцем або перешкодами
         if (other.CompareTag("Player") && Time.time >= _nextAttackTime)
         {
-            // Вираховуємо випадкову шкоду від мінімальної до максимальної
             float randomDamage = Random.Range(data.minDamage, data.maxDamage);
-            
             other.GetComponent<PlayerHealth>()?.TakeDamage(randomDamage);
             _nextAttackTime = Time.time + data.attackRate;
         }
-        
-        // Якщо додати тег "Tower" або "Castle", можна наносити шкоду будівлям
-        /*
-        if (other.CompareTag("Tower") && Time.time >= _nextAttackTime)
-        {
-            other.GetComponent<TowerHealth>()?.TakeDamage(data.towerDamage);
-            _nextAttackTime = Time.time + data.attackRate;
-        }
-        */
     }
 }
