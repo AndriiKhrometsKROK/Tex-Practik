@@ -8,7 +8,11 @@ public class TowerData : ScriptableObject
     public float attackRadius;
     public float fireRate;
     public GameObject projectilePrefab;
-    public GameObject towerPrefab; 
+    public GameObject towerPrefab;
+
+    [Header("Upgrade")]
+    public TowerData upgradedTowerData;
+    public int upgradeCost;
 
     [Header("Налаштування урону")]
     public float minDamage;

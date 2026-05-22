@@ -1,8 +1,12 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public class Projectile : MonoBehaviour
 {
+    private const float SlowDuration = 2.5f;
+
     public float speed = 10f;
+
     private Transform _target;
     private TowerData _sourceData;
 
@@ -12,7 +16,7 @@ public class Projectile : MonoBehaviour
         _sourceData = data;
     }
 
-    void Update()
+    private void Update()
     {
         if (_target == null)
         {
@@ -20,34 +24,69 @@ public class Projectile : MonoBehaviour
             return;
         }
 
-        // Самонаведення на ворога
-        Vector3 dir = _target.position - transform.position;
-        transform.position += dir.normalized * speed * Time.deltaTime;
+        Vector3 direction = _target.position - transform.position;
+        transform.position += direction.normalized * speed * Time.deltaTime;
 
         if (Vector3.Distance(transform.position, _target.position) < 0.2f)
         {
-            ApplyDamage(_target.gameObject);
+            ApplyHitEffects(_target.gameObject);
             Destroy(gameObject);
         }
     }
 
-    void ApplyDamage(GameObject enemy)
+    private void ApplyHitEffects(GameObject enemy)
     {
-        EnemyAI ai = enemy.GetComponent<EnemyAI>();
-        if (ai == null || _sourceData == null) return;
+        if (_sourceData == null) return;
 
+        if (_sourceData.aoeRadius > 0f)
+        {
+            ApplyAreaDamage();
+            return;
+        }
+
+        EnemyAI enemyAI = enemy.GetComponent<EnemyAI>();
+        if (enemyAI == null) return;
+
+        ApplyTowerEffects(enemyAI, CalculateDamage());
+    }
+
+    private void ApplyAreaDamage()
+    {
+        Collider2D[] hits = Physics2D.OverlapCircleAll(transform.position, _sourceData.aoeRadius);
+        List<EnemyAI> damagedEnemies = new List<EnemyAI>();
+        float damage = CalculateDamage();
+
+        foreach (Collider2D hit in hits)
+        {
+            if (!hit.CompareTag("Enemy")) continue;
+
+            EnemyAI enemyAI = hit.GetComponent<EnemyAI>();
+            if (enemyAI == null || damagedEnemies.Contains(enemyAI)) continue;
+
+            ApplyTowerEffects(enemyAI, damage);
+            damagedEnemies.Add(enemyAI);
+        }
+    }
+
+    private float CalculateDamage()
+    {
         float damage = Random.Range(_sourceData.minDamage, _sourceData.maxDamage);
 
-        // Логіка крита (Archer)
-        if (Random.value < _sourceData.critChance) damage *= 2;
-
-        // Нанесення урону
-        ai.TakeDamage(damage, _sourceData.isMagic);
-
-        // Тут можна додати логіку уповільнення або AOE вибуху
-        if (_sourceData.aoeRadius > 0)
+        if (Random.value <= _sourceData.critChance)
         {
-            // Логіка вибуху для Fire Tower
+            damage *= 2f;
+        }
+
+        return damage;
+    }
+
+    private void ApplyTowerEffects(EnemyAI enemyAI, float damage)
+    {
+        enemyAI.TakeDamage(damage, _sourceData.isMagic);
+
+        if (_sourceData.slowFactor > 0f)
+        {
+            enemyAI.ApplySlow(_sourceData.slowFactor, SlowDuration);
         }
     }
 }

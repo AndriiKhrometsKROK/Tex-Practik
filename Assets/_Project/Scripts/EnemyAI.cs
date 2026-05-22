@@ -1,54 +1,97 @@
+using System.Collections;
 using UnityEngine;
 
 public class EnemyAI : MonoBehaviour
 {
     public UnitData data;
-    
-    private float _currentHp;
-    private float _nextAttackTime;
-    
-    // Змінні для системи Waypoints
-    private Transform _targetWaypoint;
-    private int _waypointIndex = 0;
 
-    void Start()
+    private float _currentHp;
+    private float _baseMoveSpeed;
+    private float _currentMoveSpeed;
+    private float _nextAttackTime;
+    private Coroutine _slowCoroutine;
+    private Transform _targetWaypoint;
+    private int _waypointIndex;
+
+    private void Start()
     {
         if (data != null)
         {
             _currentHp = data.maxHp;
+            _baseMoveSpeed = data.moveSpeed;
+            _currentMoveSpeed = _baseMoveSpeed;
         }
         else
         {
-            Debug.LogError("UnitData не призначено для " + gameObject.name);
-            _currentHp = 100f; // Запобіжник
+            Debug.LogError("UnitData is not assigned for " + gameObject.name);
+            _currentHp = 100f;
+            _baseMoveSpeed = 1f;
+            _currentMoveSpeed = _baseMoveSpeed;
         }
 
-        // Встановлюємо першу точку маршруту як ціль
         if (Waypoints.points != null && Waypoints.points.Length > 0)
         {
             _targetWaypoint = Waypoints.points[0];
         }
         else
         {
-            Debug.LogError("Маршрут не знайдено! Додай об'єкт зі скриптом Waypoints на сцену.");
+            Debug.LogError("Waypoints not found. Add a Waypoints object to the scene.");
         }
     }
 
-    void Update()
+    private void Update()
     {
         if (data == null) return;
-        
+        if (GameManager.Instance != null && !GameManager.Instance.IsGameActive) return;
+
         MoveAlongPath();
+    }
+
+    public void TakeDamage(float amount, bool isMagicDamage = false)
+    {
+        if (data == null) return;
+
+        float finalDamage = amount;
+
+        if (isMagicDamage)
+        {
+            finalDamage -= finalDamage * data.magicResistance;
+        }
+        else
+        {
+            finalDamage = Mathf.Max(1f, finalDamage - data.armor);
+        }
+
+        _currentHp -= finalDamage;
+
+        if (_currentHp <= 0f)
+        {
+            Die();
+        }
+    }
+
+    public void ApplySlow(float slowFactor, float duration)
+    {
+        if (slowFactor <= 0f || duration <= 0f) return;
+
+        if (_slowCoroutine != null)
+        {
+            StopCoroutine(_slowCoroutine);
+        }
+
+        _slowCoroutine = StartCoroutine(SlowRoutine(Mathf.Clamp01(slowFactor), duration));
     }
 
     private void MoveAlongPath()
     {
         if (_targetWaypoint == null) return;
 
-        // Рухаємось до поточної цільової точки
-        transform.position = Vector2.MoveTowards(transform.position, _targetWaypoint.position, data.moveSpeed * Time.deltaTime);
+        transform.position = Vector2.MoveTowards(
+            transform.position,
+            _targetWaypoint.position,
+            _currentMoveSpeed * Time.deltaTime
+        );
 
-        // Якщо ворог дійшов до точки (з мінімальною похибкою 0.1f)
         if (Vector2.Distance(transform.position, _targetWaypoint.position) <= 0.1f)
         {
             GetNextWaypoint();
@@ -57,68 +100,56 @@ public class EnemyAI : MonoBehaviour
 
     private void GetNextWaypoint()
     {
-        // Якщо дійшли до останньої точки маршруту (тобто до бази гравця)
         if (_waypointIndex >= Waypoints.points.Length - 1)
         {
             ReachBase();
             return;
         }
 
-        // Перемикаємось на наступну точку
         _waypointIndex++;
         _targetWaypoint = Waypoints.points[_waypointIndex];
     }
 
     private void ReachBase()
     {
-        // ТУТ В МАЙБУТНЬОМУ МОЖНА ДОДАТИ: GameManager.Instance.TakeLife(1);
-        Debug.Log(gameObject.name + " дійшов до бази!");
-        Destroy(gameObject); // Знищуємо ворога, бо він пройшов маршрут
-    }
-
-    public void TakeDamage(float amount, bool isMagicDamage = false)
-    {
-        float finalDamage = amount;
-
-        if (isMagicDamage)
+        if (GameManager.Instance != null)
         {
-            // Магічний спротив
-            finalDamage -= finalDamage * data.magicResistance; 
-        }
-        else
-        {
-            // Броня
-            finalDamage = Mathf.Max(1f, finalDamage - data.armor);
+            GameManager.Instance.EnemyReachedBase(data);
         }
 
-        _currentHp -= finalDamage;
-        
-        if (_currentHp <= 0)
-        {
-            Die();
-        }
+        Debug.Log(gameObject.name + " reached the base.");
+        Destroy(gameObject);
     }
 
     private void Die()
     {
-        if (GameManager.Instance != null && data != null)
+        if (GameManager.Instance != null)
         {
-            GameManager.Instance.AddGold(data.goldReward);
+            GameManager.Instance.EnemyKilled(data);
         }
 
         Destroy(gameObject);
     }
-    
-    void OnTriggerStay2D(Collider2D other)
+
+    private void OnTriggerStay2D(Collider2D other)
     {
         if (data == null) return;
+        if (GameManager.Instance != null && !GameManager.Instance.IsGameActive) return;
 
-        // Залишив логіку нанесення шкоди, якщо ворог стикається з гравцем або перешкодами
         if (other.CompareTag("Player") && Time.time >= _nextAttackTime)
         {
             float randomDamage = Random.Range(data.minDamage, data.maxDamage);
             other.GetComponent<PlayerHealth>()?.TakeDamage(randomDamage);
             _nextAttackTime = Time.time + data.attackRate;
         }
+    }
+
+    private IEnumerator SlowRoutine(float slowFactor, float duration)
+    {
+        _currentMoveSpeed = _baseMoveSpeed * slowFactor;
+        yield return new WaitForSeconds(duration);
+
+        _currentMoveSpeed = _baseMoveSpeed;
+        _slowCoroutine = null;
     }
 }

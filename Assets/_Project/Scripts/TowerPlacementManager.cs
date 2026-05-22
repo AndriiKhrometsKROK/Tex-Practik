@@ -1,17 +1,30 @@
 using UnityEngine;
-using UnityEngine.EventSystems; // Для перевірки наведення на UI (кнопки)
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
 
 public class TowerPlacementManager : MonoBehaviour
 {
     public static TowerPlacementManager Instance { get; private set; }
 
-    [Header("Налаштування будівництва")]
-    public float gridSize = 1f; // Розмір клітинки сітки
-    public LayerMask obstacleLayer; // Шар об'єктів, на яких НЕ можна будувати (дорога, інші вежі)
+    [Header("Build Settings")]
+    public float gridSize = 1f;
+    public LayerMask obstacleLayer;
+
+    [Header("Tower Menu")]
+    [SerializeField] private float sellRefundMultiplier = 0.6f;
+    [SerializeField] private Vector2 towerMenuScreenOffset = new Vector2(0f, 80f);
 
     private TowerData _towerToBuild;
     private GameObject _ghostTower;
     private SpriteRenderer _ghostRenderer;
+
+    private TowerController _selectedTower;
+    private Canvas _towerMenuCanvas;
+    private RectTransform _towerMenuPanel;
+    private Button _sellButton;
+    private Button _upgradeButton;
+    private Text _sellButtonText;
+    private Text _upgradeButtonText;
 
     private void Awake()
     {
@@ -19,27 +32,22 @@ public class TowerPlacementManager : MonoBehaviour
         else Destroy(gameObject);
     }
 
-    // Цю функцію буде викликати кнопка магазину
     public void SelectTowerToBuild(TowerData towerData)
     {
+        CloseTowerMenu();
         _towerToBuild = towerData;
-        
-        // Видаляємо старий фантом, якщо ми передумали і вибрали іншу вежу
+
         if (_ghostTower != null) Destroy(_ghostTower);
 
         if (_towerToBuild != null && _towerToBuild.towerPrefab != null)
         {
-            // Створюємо "фантом" обраної вежі
             _ghostTower = Instantiate(_towerToBuild.towerPrefab);
-            
-            // Вимикаємо логіку на фантомі, щоб він не стріляв під час будівництва
-            if (_ghostTower.TryGetComponent<TowerController>(out var tc)) tc.enabled = false;
-            
-            // Вимикаємо коллайдери, щоб фантом не заважав ворогам
-            Collider2D[] colliders = _ghostTower.GetComponentsInChildren<Collider2D>();
-            foreach(var col in colliders) col.enabled = false;
 
-            // Шукаємо малюнок вежі, щоб зробити його напівпрозорим
+            if (_ghostTower.TryGetComponent<TowerController>(out var tc)) tc.enabled = false;
+
+            Collider2D[] colliders = _ghostTower.GetComponentsInChildren<Collider2D>();
+            foreach (var col in colliders) col.enabled = false;
+
             _ghostRenderer = _ghostTower.GetComponent<SpriteRenderer>();
             if (_ghostRenderer == null) _ghostRenderer = _ghostTower.GetComponentInChildren<SpriteRenderer>();
         }
@@ -47,21 +55,22 @@ public class TowerPlacementManager : MonoBehaviour
 
     private void Update()
     {
-        // Якщо вежа не вибрана, нічого не робимо
-        if (_towerToBuild == null || _ghostTower == null) return;
-
-        // Якщо миша знаходиться над UI (наприклад, кнопкою магазину) - ховаємо фантом
-        if (EventSystem.current.IsPointerOverGameObject())
+        if (_towerToBuild == null || _ghostTower == null)
         {
-            _ghostRenderer.enabled = false;
+            HandleTowerSelectionInput();
+            UpdateTowerMenuPosition();
             return;
         }
-        _ghostRenderer.enabled = true;
 
-        // Отримуємо позицію миші в ігровому світі
+        if (IsPointerOverUI())
+        {
+            if (_ghostRenderer != null) _ghostRenderer.enabled = false;
+            return;
+        }
+
+        if (_ghostRenderer != null) _ghostRenderer.enabled = true;
+
         Vector2 mousePos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-        
-        // Прив'язуємо позицію до рівної сітки
         Vector2 snappedPos = new Vector2(
             Mathf.Round(mousePos.x / gridSize) * gridSize,
             Mathf.Round(mousePos.y / gridSize) * gridSize
@@ -69,22 +78,20 @@ public class TowerPlacementManager : MonoBehaviour
 
         _ghostTower.transform.position = snappedPos;
 
-        // Перевіряємо, чи місце вільне (шукаємо коллайдери на шарі Obstacle)
         bool canBuild = !Physics2D.OverlapCircle(snappedPos, 0.2f, obstacleLayer);
 
-        // Фарбуємо фантом у зелений (можна будувати) або червоний (зайнято)
-        if (canBuild)
-            _ghostRenderer.color = new Color(0.5f, 1f, 0.5f, 0.7f); // Зеленуватий прозорий
-        else
-            _ghostRenderer.color = new Color(1f, 0.3f, 0.3f, 0.7f); // Червонуватий прозорий
+        if (_ghostRenderer != null)
+        {
+            _ghostRenderer.color = canBuild
+                ? new Color(0.5f, 1f, 0.5f, 0.7f)
+                : new Color(1f, 0.3f, 0.3f, 0.7f);
+        }
 
-        // ЛІВИЙ клік миші - побудувати
         if (Input.GetMouseButtonDown(0) && canBuild)
         {
             BuildTower(snappedPos);
         }
 
-        // ПРАВИЙ клік миші (або Escape) - відмінити будівництво
         if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.Escape))
         {
             DeselectTower();
@@ -93,27 +100,21 @@ public class TowerPlacementManager : MonoBehaviour
 
     private void BuildTower(Vector2 position)
     {
-        // Пробуємо списати золото через наш GameManager
         if (GameManager.Instance.SpendGold(_towerToBuild.cost))
         {
-            // Створюємо СПРАВЖНЮ вежу
             GameObject newTower = Instantiate(_towerToBuild.towerPrefab, position, Quaternion.identity);
-            
-            // Передаємо вежі її дані
+
             if (newTower.TryGetComponent<TowerController>(out var tc))
             {
                 tc.data = _towerToBuild;
             }
 
-            Debug.Log($"Побудовано вежу: {_towerToBuild.towerName}");
-            
-            // Скидаємо вибір (або можна закоментувати цей рядок, щоб будувати кілька веж підряд)
-            DeselectTower(); 
+            Debug.Log($"Tower built: {_towerToBuild.towerName}");
+            DeselectTower();
         }
         else
         {
-            // Можна додати виклик UI анімації "Недостатньо грошей"
-            Debug.LogWarning("Недостатньо золота для будівництва!");
+            Debug.LogWarning("Not enough gold to build this tower.");
         }
     }
 
@@ -125,5 +126,215 @@ public class TowerPlacementManager : MonoBehaviour
             Destroy(_ghostTower);
             _ghostTower = null;
         }
+    }
+
+    private void HandleTowerSelectionInput()
+    {
+        if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.Escape))
+        {
+            CloseTowerMenu();
+            return;
+        }
+
+        if (!Input.GetMouseButtonDown(0) || IsPointerOverUI()) return;
+
+        Vector2 mousePos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+        TowerController clickedTower = FindTowerAt(mousePos);
+
+        if (clickedTower != null)
+        {
+            OpenTowerMenu(clickedTower);
+        }
+        else
+        {
+            CloseTowerMenu();
+        }
+    }
+
+    private TowerController FindTowerAt(Vector2 worldPosition)
+    {
+        Collider2D[] hits = Physics2D.OverlapPointAll(worldPosition);
+        foreach (Collider2D hit in hits)
+        {
+            TowerController tower = hit.GetComponentInParent<TowerController>();
+            if (tower != null) return tower;
+        }
+
+        return null;
+    }
+
+    private void OpenTowerMenu(TowerController tower)
+    {
+        _selectedTower = tower;
+        EnsureTowerMenu();
+        _towerMenuPanel.gameObject.SetActive(true);
+        RefreshTowerMenu();
+        UpdateTowerMenuPosition();
+    }
+
+    private void CloseTowerMenu()
+    {
+        _selectedTower = null;
+        if (_towerMenuPanel != null) _towerMenuPanel.gameObject.SetActive(false);
+    }
+
+    private void RefreshTowerMenu()
+    {
+        if (_selectedTower == null || _selectedTower.data == null) return;
+
+        TowerData currentData = _selectedTower.data;
+        int refund = Mathf.RoundToInt(currentData.cost * sellRefundMultiplier);
+        int upgradeCost = GetUpgradeCost(currentData);
+        bool hasUpgrade = currentData.upgradedTowerData != null;
+        bool canPayUpgrade = GameManager.Instance != null && GameManager.Instance.currentGold >= upgradeCost;
+
+        _sellButton.interactable = GameManager.Instance != null;
+        _upgradeButton.interactable = hasUpgrade && canPayUpgrade;
+        _sellButtonText.text = $"Продати ({refund})";
+        _upgradeButtonText.text = hasUpgrade ? $"Покращити ({upgradeCost})" : "Макс. рівень";
+    }
+
+    private void SellSelectedTower()
+    {
+        if (_selectedTower == null || _selectedTower.data == null || GameManager.Instance == null) return;
+
+        int refund = Mathf.RoundToInt(_selectedTower.data.cost * sellRefundMultiplier);
+        GameManager.Instance.AddGold(refund);
+
+        GameObject towerObject = _selectedTower.gameObject;
+        CloseTowerMenu();
+        Destroy(towerObject);
+    }
+
+    private void UpgradeSelectedTower()
+    {
+        if (_selectedTower == null || _selectedTower.data == null) return;
+
+        TowerData currentData = _selectedTower.data;
+        TowerData upgradedData = currentData.upgradedTowerData;
+        if (upgradedData == null || GameManager.Instance == null) return;
+
+        int upgradeCost = GetUpgradeCost(currentData);
+        if (!GameManager.Instance.SpendGold(upgradeCost)) return;
+
+        _selectedTower.data = upgradedData;
+        ApplyUpgradedTowerVisuals(_selectedTower, upgradedData);
+        RefreshTowerMenu();
+    }
+
+    private int GetUpgradeCost(TowerData currentData)
+    {
+        if (currentData == null || currentData.upgradedTowerData == null) return 0;
+        if (currentData.upgradeCost > 0) return currentData.upgradeCost;
+
+        return Mathf.Max(0, currentData.upgradedTowerData.cost - currentData.cost);
+    }
+
+    private void ApplyUpgradedTowerVisuals(TowerController tower, TowerData upgradedData)
+    {
+        if (tower == null || upgradedData == null || upgradedData.towerPrefab == null) return;
+
+        SpriteRenderer sourceRenderer = upgradedData.towerPrefab.GetComponentInChildren<SpriteRenderer>();
+        SpriteRenderer targetRenderer = tower.GetComponentInChildren<SpriteRenderer>();
+        if (sourceRenderer != null && targetRenderer != null)
+        {
+            targetRenderer.sprite = sourceRenderer.sprite;
+            targetRenderer.color = sourceRenderer.color;
+        }
+    }
+
+    private void EnsureTowerMenu()
+    {
+        if (_towerMenuPanel != null) return;
+
+        _towerMenuCanvas = FindAnyObjectByType<Canvas>();
+        if (_towerMenuCanvas == null)
+        {
+            GameObject canvasObject = new GameObject("Tower Menu Canvas");
+            _towerMenuCanvas = canvasObject.AddComponent<Canvas>();
+            _towerMenuCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvasObject.AddComponent<CanvasScaler>();
+            canvasObject.AddComponent<GraphicRaycaster>();
+        }
+        else if (_towerMenuCanvas.GetComponent<GraphicRaycaster>() == null)
+        {
+            _towerMenuCanvas.gameObject.AddComponent<GraphicRaycaster>();
+        }
+
+        GameObject panelObject = new GameObject("Tower Action Menu");
+        panelObject.transform.SetParent(_towerMenuCanvas.transform, false);
+
+        _towerMenuPanel = panelObject.AddComponent<RectTransform>();
+        _towerMenuPanel.sizeDelta = new Vector2(180f, 86f);
+        _towerMenuPanel.pivot = new Vector2(0.5f, 0f);
+
+        Image panelImage = panelObject.AddComponent<Image>();
+        panelImage.color = new Color(0.08f, 0.08f, 0.08f, 0.9f);
+
+        VerticalLayoutGroup layout = panelObject.AddComponent<VerticalLayoutGroup>();
+        layout.padding = new RectOffset(8, 8, 8, 8);
+        layout.spacing = 6f;
+        layout.childForceExpandWidth = true;
+        layout.childForceExpandHeight = true;
+
+        _sellButton = CreateMenuButton("Sell Button", panelObject.transform, SellSelectedTower, out _sellButtonText);
+        _upgradeButton = CreateMenuButton("Upgrade Button", panelObject.transform, UpgradeSelectedTower, out _upgradeButtonText);
+        _towerMenuPanel.gameObject.SetActive(false);
+    }
+
+    private Button CreateMenuButton(string objectName, Transform parent, UnityEngine.Events.UnityAction onClick, out Text label)
+    {
+        GameObject buttonObject = new GameObject(objectName);
+        buttonObject.transform.SetParent(parent, false);
+
+        Image buttonImage = buttonObject.AddComponent<Image>();
+        buttonImage.color = new Color(0.2f, 0.2f, 0.2f, 1f);
+
+        Button button = buttonObject.AddComponent<Button>();
+        button.onClick.AddListener(onClick);
+
+        GameObject textObject = new GameObject("Text");
+        textObject.transform.SetParent(buttonObject.transform, false);
+
+        RectTransform textRect = textObject.AddComponent<RectTransform>();
+        textRect.anchorMin = Vector2.zero;
+        textRect.anchorMax = Vector2.one;
+        textRect.offsetMin = Vector2.zero;
+        textRect.offsetMax = Vector2.zero;
+
+        label = textObject.AddComponent<Text>();
+        label.alignment = TextAnchor.MiddleCenter;
+        label.color = Color.white;
+        label.fontSize = 15;
+        label.resizeTextForBestFit = true;
+        label.resizeTextMinSize = 10;
+        label.resizeTextMaxSize = 15;
+        label.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+
+        return button;
+    }
+
+    private void UpdateTowerMenuPosition()
+    {
+        if (_towerMenuPanel == null || !_towerMenuPanel.gameObject.activeSelf || _selectedTower == null) return;
+
+        Camera mainCamera = Camera.main;
+        if (mainCamera == null) return;
+
+        Vector2 screenPosition = mainCamera.WorldToScreenPoint(_selectedTower.transform.position);
+        screenPosition += towerMenuScreenOffset;
+
+        RectTransform canvasRect = (RectTransform)_towerMenuCanvas.transform;
+        Camera uiCamera = _towerMenuCanvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : _towerMenuCanvas.worldCamera;
+
+        if (RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect, screenPosition, uiCamera, out Vector2 localPoint))
+        {
+            _towerMenuPanel.anchoredPosition = localPoint;
+        }
+    }
+
+    private bool IsPointerOverUI()
+    {
+        return EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
     }
 }

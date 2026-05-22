@@ -1,13 +1,13 @@
-using UnityEngine;
-using UnityEngine.UI; // Для работы с UI
+п»їusing UnityEngine;
+using UnityEngine.UI;
 
 public class PlayerHealth : MonoBehaviour
 {
     public float maxHealth = 100f;
     public float currentHealth;
-    public Slider hpSlider; // Сюда закинем наш ползунок из Иерархии
+    public Slider hpSlider;
 
-    void Start()
+    private void Start()
     {
         currentHealth = maxHealth;
         if (hpSlider != null)
@@ -19,14 +19,21 @@ public class PlayerHealth : MonoBehaviour
 
     public void TakeDamage(float amount)
     {
-        currentHealth -= amount;
-        if (currentHealth > maxHealth) currentHealth = maxHealth; // Защита от оверхила
+        currentHealth = Mathf.Clamp(currentHealth - amount, 0f, maxHealth);
 
-        if (hpSlider != null) hpSlider.value = currentHealth;
-
-        if (currentHealth <= 0)
+        if (hpSlider != null)
         {
-            Debug.Log("КеномАрч погиб!");
+            hpSlider.value = currentHealth;
+        }
+
+        if (currentHealth <= 0f)
+        {
+            if (GameManager.Instance != null)
+            {
+                GameManager.Instance.PlayerDied();
+            }
+
+            Debug.Log("Player died.");
             Destroy(gameObject);
         }
     }
