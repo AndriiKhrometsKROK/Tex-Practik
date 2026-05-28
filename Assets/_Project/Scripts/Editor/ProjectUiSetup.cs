@@ -104,8 +104,8 @@ public static class ProjectUiSetup
         TextMeshProUGUI health = CreateText("Base Health Text", hudPanel, "Життя: 0 / 0", 24, TextAlignmentOptions.Center);
         TextMeshProUGUI wave = CreateText("Wave Text", hudPanel, "Хвиля 0 / 0", 24, TextAlignmentOptions.Right);
 
-        RectTransform victory = CreateFinalPanel(canvas.transform, "Victory Panel", "Victory", new Color(0.05f, 0.22f, 0.12f, 0.96f), hud, true);
-        RectTransform gameOver = CreateFinalPanel(canvas.transform, "Game Over Panel", "Game Over", new Color(0.24f, 0.05f, 0.05f, 0.96f), hud, false);
+        RectTransform victory = CreateFinalPanel(canvas.transform, "Victory Panel", "Перемога", new Color(0.05f, 0.22f, 0.12f, 0.96f), hud, true);
+        RectTransform gameOver = CreateFinalPanel(canvas.transform, "Game Over Panel", "Поразка", new Color(0.24f, 0.05f, 0.05f, 0.96f), hud, false);
         victory.gameObject.SetActive(false);
         gameOver.gameObject.SetActive(false);
 

@@ -22,6 +22,6 @@ public class PlayerShooting : MonoBehaviour
         mousePos.z = 0;
         Vector3 direction = mousePos - transform.position;
         float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
-        Instantiate(bulletPrefab, transform.position, Quaternion.Euler(0, 0, angle));
+        ObjectPoolManager.Spawn(bulletPrefab, transform.position, Quaternion.Euler(0, 0, angle));
     }
 }

@@ -79,7 +79,7 @@ public class HeroController : MonoBehaviour
         // Для теста просто спавним префаб в сторону мышки
         if (damagePrefab != null)
         {
-            GameObject go = Instantiate(damagePrefab, transform.position, Quaternion.identity);
+            GameObject go = ObjectPoolManager.Spawn(damagePrefab, transform.position, Quaternion.identity);
             Vector3 mousePos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
             mousePos.z = 0;
             Vector3 dir = mousePos - transform.position;

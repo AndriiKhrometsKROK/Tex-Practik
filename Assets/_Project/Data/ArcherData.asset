@@ -23,7 +23,10 @@ MonoBehaviour:
   isMagic: 0
   critChance: 0.2
   slowFactor: 0
+  slowDuration: 2.5
   aoeRadius: 0
   dotDamage: 0
+  dotDuration: 3
+  dotTickInterval: 1
   armorShred: 0
   stunChance: 0

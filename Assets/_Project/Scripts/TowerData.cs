@@ -14,16 +14,19 @@ public class TowerData : ScriptableObject
     public TowerData upgradedTowerData;
     public int upgradeCost;
 
-    [Header("Налаштування урону")]
+    [Header("Damage")]
     public float minDamage;
     public float maxDamage;
     public bool isMagic;
 
-    [Header("Особливості (залишайте 0, якщо не потрібно)")]
-    public float critChance;       // Для Archer (напр. 0.2 для 20%)
-    public float slowFactor;      // Для Ice (напр. 0.5 для уповільнення на 50%)
-    public float aoeRadius;       // Для Fire (радіус вибуху)
-    public float dotDamage;       // Для Fire/Frog (урон в секунду)
-    public float armorShred;      // Для Alchemist (мінус броня)
-    public float stunChance;      // Для Wooden (шанс оглушити)
+    [Header("Special Effects")]
+    public float critChance;
+    public float slowFactor;
+    public float slowDuration = 2.5f;
+    public float aoeRadius;
+    public float dotDamage;
+    public float dotDuration = 3f;
+    public float dotTickInterval = 1f;
+    public float armorShred;
+    public float stunChance;
 }

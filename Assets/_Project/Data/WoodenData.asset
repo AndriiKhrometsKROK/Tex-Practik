@@ -16,14 +16,17 @@ MonoBehaviour:
   cost: 80
   attackRadius: 7
   fireRate: 1.5
-  projectilePrefab: {fileID: 0}
+  projectilePrefab: {fileID: 692415703611947310, guid: c89f43a5fd9190d48b0806fed5bfa1cc, type: 3}
   towerPrefab: {fileID: 8736044710483178715, guid: 631cf8f8dd656f048a4a6d6bf9a11325, type: 3}
   minDamage: 6
   maxDamage: 10
   isMagic: 0
   critChance: 0
   slowFactor: 0
+  slowDuration: 2.5
   aoeRadius: 0
-  dotDamage: 0
+  dotDamage: 5
+  dotDuration: 3
+  dotTickInterval: 1
   armorShred: 0
   stunChance: 0.15

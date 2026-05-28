@@ -14,9 +14,14 @@ public class TowerPlacementManager : MonoBehaviour
     [SerializeField] private float sellRefundMultiplier = 0.6f;
     [SerializeField] private Vector2 towerMenuScreenOffset = new Vector2(0f, 80f);
 
+    [Header("Range Indicator")]
+    [SerializeField] private Color buildRangeColor = new Color(0.35f, 0.85f, 1f, 0.75f);
+    [SerializeField] private Color selectedRangeColor = new Color(1f, 0.9f, 0.25f, 0.85f);
+
     private TowerData _towerToBuild;
     private GameObject _ghostTower;
     private SpriteRenderer _ghostRenderer;
+    private TowerRangeIndicator _rangeIndicator;
 
     private TowerController _selectedTower;
     private Canvas _towerMenuCanvas;
@@ -42,6 +47,7 @@ public class TowerPlacementManager : MonoBehaviour
         if (_towerToBuild != null && _towerToBuild.towerPrefab != null)
         {
             _ghostTower = Instantiate(_towerToBuild.towerPrefab);
+            EnsureRangeIndicator();
 
             if (_ghostTower.TryGetComponent<TowerController>(out var tc)) tc.enabled = false;
 
@@ -65,6 +71,7 @@ public class TowerPlacementManager : MonoBehaviour
         if (IsPointerOverUI())
         {
             if (_ghostRenderer != null) _ghostRenderer.enabled = false;
+            _rangeIndicator?.Hide();
             return;
         }
 
@@ -77,6 +84,7 @@ public class TowerPlacementManager : MonoBehaviour
         );
 
         _ghostTower.transform.position = snappedPos;
+        ShowRange(snappedPos, _towerToBuild.attackRadius, buildRangeColor);
 
         bool canBuild = !Physics2D.OverlapCircle(snappedPos, 0.2f, obstacleLayer);
 
@@ -126,6 +134,8 @@ public class TowerPlacementManager : MonoBehaviour
             Destroy(_ghostTower);
             _ghostTower = null;
         }
+
+        _rangeIndicator?.Hide();
     }
 
     private void HandleTowerSelectionInput()
@@ -170,12 +180,14 @@ public class TowerPlacementManager : MonoBehaviour
         _towerMenuPanel.gameObject.SetActive(true);
         RefreshTowerMenu();
         UpdateTowerMenuPosition();
+        ShowRange(tower.transform.position, tower.data != null ? tower.data.attackRadius : 0f, selectedRangeColor);
     }
 
     private void CloseTowerMenu()
     {
         _selectedTower = null;
         if (_towerMenuPanel != null) _towerMenuPanel.gameObject.SetActive(false);
+        _rangeIndicator?.Hide();
     }
 
     private void RefreshTowerMenu()
@@ -220,6 +232,7 @@ public class TowerPlacementManager : MonoBehaviour
         _selectedTower.data = upgradedData;
         ApplyUpgradedTowerVisuals(_selectedTower, upgradedData);
         RefreshTowerMenu();
+        ShowRange(_selectedTower.transform.position, upgradedData.attackRadius, selectedRangeColor);
     }
 
     private int GetUpgradeCost(TowerData currentData)
@@ -336,5 +349,19 @@ public class TowerPlacementManager : MonoBehaviour
     private bool IsPointerOverUI()
     {
         return EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
+    }
+
+    private void EnsureRangeIndicator()
+    {
+        if (_rangeIndicator != null) return;
+
+        GameObject indicatorObject = new GameObject("Tower Range Indicator");
+        _rangeIndicator = indicatorObject.AddComponent<TowerRangeIndicator>();
+    }
+
+    private void ShowRange(Vector3 position, float radius, Color color)
+    {
+        EnsureRangeIndicator();
+        _rangeIndicator.Show(position, radius, color);
     }
 }

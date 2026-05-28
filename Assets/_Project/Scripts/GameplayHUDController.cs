@@ -1,6 +1,7 @@
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 public class GameplayHUDController : MonoBehaviour
 {
@@ -13,6 +14,8 @@ public class GameplayHUDController : MonoBehaviour
     [SerializeField] private GameObject victoryPanel;
     [SerializeField] private GameObject gameOverPanel;
     [SerializeField] private string mainMenuSceneName = "MainMenu";
+    [SerializeField] private string victoryTitle = "Перемога";
+    [SerializeField] private string gameOverTitle = "Поразка";
 
     private GameManager _gameManager;
     private EnemySpawner _enemySpawner;
@@ -33,6 +36,14 @@ public class GameplayHUDController : MonoBehaviour
         victoryPanel = targetVictoryPanel;
         gameOverPanel = targetGameOverPanel;
         mainMenuSceneName = targetMainMenuSceneName;
+    }
+
+    private void Awake()
+    {
+        AutoFindFinalPanels();
+        PrepareFinalPanel(victoryPanel, victoryTitle);
+        PrepareFinalPanel(gameOverPanel, gameOverTitle);
+        SetFinalScreensVisible(false, false);
     }
 
     private void Start()
@@ -74,12 +85,14 @@ public class GameplayHUDController : MonoBehaviour
 
     public void RestartScene()
     {
+        Time.timeScale = 1f;
         Scene activeScene = SceneManager.GetActiveScene();
         SceneManager.LoadScene(activeScene.name);
     }
 
     public void BackToMainMenu()
     {
+        Time.timeScale = 1f;
         SceneManager.LoadScene(mainMenuSceneName);
     }
 
@@ -112,14 +125,86 @@ public class GameplayHUDController : MonoBehaviour
 
     private void UpdateFinalScreens(GameState state)
     {
+        bool showVictory = state == GameState.Victory;
+        bool showGameOver = state == GameState.Defeat;
+
+        SetFinalScreensVisible(showVictory, showGameOver);
+
+        if (showVictory || showGameOver)
+        {
+            Time.timeScale = 0f;
+        }
+        else if (Time.timeScale == 0f)
+        {
+            Time.timeScale = 1f;
+        }
+    }
+
+    private void SetFinalScreensVisible(bool showVictory, bool showGameOver)
+    {
         if (victoryPanel != null)
         {
-            victoryPanel.SetActive(state == GameState.Victory);
+            victoryPanel.SetActive(showVictory);
         }
 
         if (gameOverPanel != null)
         {
-            gameOverPanel.SetActive(state == GameState.Defeat);
+            gameOverPanel.SetActive(showGameOver);
+        }
+    }
+
+    private void AutoFindFinalPanels()
+    {
+        if (victoryPanel == null)
+        {
+            victoryPanel = FindSceneObjectByName("Victory Panel");
+        }
+
+        if (gameOverPanel == null)
+        {
+            gameOverPanel = FindSceneObjectByName("Game Over Panel");
+        }
+    }
+
+    private GameObject FindSceneObjectByName(string objectName)
+    {
+        foreach (GameObject sceneObject in Resources.FindObjectsOfTypeAll<GameObject>())
+        {
+            if (sceneObject == null) continue;
+            if (!sceneObject.scene.IsValid()) continue;
+            if (sceneObject.name == objectName) return sceneObject;
+        }
+
+        return null;
+    }
+
+    private void PrepareFinalPanel(GameObject panel, string title)
+    {
+        if (panel == null) return;
+
+        foreach (TextMeshProUGUI text in panel.GetComponentsInChildren<TextMeshProUGUI>(true))
+        {
+            if (text.GetComponentInParent<Button>() == null)
+            {
+                text.text = title;
+                break;
+            }
+        }
+
+        foreach (Button button in panel.GetComponentsInChildren<Button>(true))
+        {
+            if (button.onClick.GetPersistentEventCount() > 0) continue;
+
+            if (button.name.Contains("Restart"))
+            {
+                button.onClick.RemoveListener(RestartScene);
+                button.onClick.AddListener(RestartScene);
+            }
+            else if (button.name.Contains("Menu"))
+            {
+                button.onClick.RemoveListener(BackToMainMenu);
+                button.onClick.AddListener(BackToMainMenu);
+            }
         }
     }
 }

@@ -3,8 +3,6 @@ using UnityEngine;
 
 public class Projectile : MonoBehaviour
 {
-    private const float SlowDuration = 2.5f;
-
     public float speed = 10f;
 
     private Transform _target;
@@ -16,11 +14,17 @@ public class Projectile : MonoBehaviour
         _sourceData = data;
     }
 
+    private void OnDisable()
+    {
+        _target = null;
+        _sourceData = null;
+    }
+
     private void Update()
     {
         if (_target == null)
         {
-            Destroy(gameObject);
+            ObjectPoolManager.Return(gameObject);
             return;
         }
 
@@ -30,7 +34,7 @@ public class Projectile : MonoBehaviour
         if (Vector3.Distance(transform.position, _target.position) < 0.2f)
         {
             ApplyHitEffects(_target.gameObject);
-            Destroy(gameObject);
+            ObjectPoolManager.Return(gameObject);
         }
     }
 
@@ -40,7 +44,7 @@ public class Projectile : MonoBehaviour
 
         if (_sourceData.aoeRadius > 0f)
         {
-            ApplyAreaDamage();
+            ApplyAreaDamage(enemy.transform.position);
             return;
         }
 
@@ -50,9 +54,9 @@ public class Projectile : MonoBehaviour
         ApplyTowerEffects(enemyAI, CalculateDamage());
     }
 
-    private void ApplyAreaDamage()
+    private void ApplyAreaDamage(Vector3 center)
     {
-        Collider2D[] hits = Physics2D.OverlapCircleAll(transform.position, _sourceData.aoeRadius);
+        Collider2D[] hits = Physics2D.OverlapCircleAll(center, _sourceData.aoeRadius);
         List<EnemyAI> damagedEnemies = new List<EnemyAI>();
         float damage = CalculateDamage();
 
@@ -86,7 +90,27 @@ public class Projectile : MonoBehaviour
 
         if (_sourceData.slowFactor > 0f)
         {
-            enemyAI.ApplySlow(_sourceData.slowFactor, SlowDuration);
+            enemyAI.ApplySlow(_sourceData.slowFactor, GetSlowDuration());
         }
+
+        if (_sourceData.dotDamage > 0f)
+        {
+            enemyAI.ApplyPoison(_sourceData.dotDamage, GetDotDuration(), GetDotTickInterval());
+        }
+    }
+
+    private float GetSlowDuration()
+    {
+        return _sourceData.slowDuration > 0f ? _sourceData.slowDuration : 2.5f;
+    }
+
+    private float GetDotDuration()
+    {
+        return _sourceData.dotDuration > 0f ? _sourceData.dotDuration : 3f;
+    }
+
+    private float GetDotTickInterval()
+    {
+        return _sourceData.dotTickInterval > 0f ? _sourceData.dotTickInterval : 1f;
     }
 }

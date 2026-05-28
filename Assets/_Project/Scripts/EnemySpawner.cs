@@ -7,17 +7,98 @@ using UnityEngine.UI;
 public class Wave
 {
     public string waveName = "Wave";
+    public WaveEnemyConfig[] enemies;
     public GameObject[] enemyPrefabs;
     public int enemyCount = 10;
     public float spawnInterval = 2f;
 }
 
+[Serializable]
+public class WaveEnemyConfig
+{
+    public string enemyName = "Enemy";
+    public GameObject enemyPrefab;
+    public string resourcePath;
+    public int count = 1;
+    public float startDelay;
+    public float spawnInterval = 1f;
+}
+
 public class EnemySpawner : MonoBehaviour
 {
     [Header("Waves")]
+    public bool useDefaultWavesIfEmpty = true;
     public Wave[] waves =
     {
-        new Wave()
+        new Wave
+        {
+            waveName = "Wave 1 - Zombies",
+            enemies = new[]
+            {
+                new WaveEnemyConfig
+                {
+                    enemyName = "Zombie",
+                    resourcePath = "Enemies/Zombie_Enemy",
+                    count = 8,
+                    startDelay = 0f,
+                    spawnInterval = 1.2f
+                }
+            }
+        },
+        new Wave
+        {
+            waveName = "Wave 2 - Fighting Dogs",
+            enemies = new[]
+            {
+                new WaveEnemyConfig
+                {
+                    enemyName = "Zombie",
+                    resourcePath = "Enemies/Zombie_Enemy",
+                    count = 6,
+                    startDelay = 0f,
+                    spawnInterval = 1f
+                },
+                new WaveEnemyConfig
+                {
+                    enemyName = "Fighting Dog",
+                    resourcePath = "Enemies/Fighting Dog_Enemy",
+                    count = 5,
+                    startDelay = 2f,
+                    spawnInterval = 0.9f
+                }
+            }
+        },
+        new Wave
+        {
+            waveName = "Wave 3 - Wizard Attack",
+            enemies = new[]
+            {
+                new WaveEnemyConfig
+                {
+                    enemyName = "Zombie",
+                    resourcePath = "Enemies/Zombie_Enemy",
+                    count = 8,
+                    startDelay = 0f,
+                    spawnInterval = 0.85f
+                },
+                new WaveEnemyConfig
+                {
+                    enemyName = "Fighting Dog",
+                    resourcePath = "Enemies/Fighting Dog_Enemy",
+                    count = 6,
+                    startDelay = 1.5f,
+                    spawnInterval = 0.75f
+                },
+                new WaveEnemyConfig
+                {
+                    enemyName = "Wizard",
+                    resourcePath = "Enemies/Wizard_Enemy",
+                    count = 4,
+                    startDelay = 3f,
+                    spawnInterval = 1.4f
+                }
+            }
+        }
     };
 
     [Header("UI")]
@@ -35,6 +116,7 @@ public class EnemySpawner : MonoBehaviour
     private void Awake()
     {
         LoadEnemyPrefabs();
+        EnsureWaveConfig();
     }
 
     private void Start()
@@ -81,7 +163,7 @@ public class EnemySpawner : MonoBehaviour
         IsSpawningWave = true;
         UpdateStartWaveButton();
 
-        GameManager.Instance?.BeginWave(CurrentWaveIndex + 1, waves.Length, Mathf.Max(0, wave.enemyCount));
+        GameManager.Instance?.BeginWave(CurrentWaveIndex + 1, waves.Length, GetEnemyCount(wave));
         _spawnCoroutine = StartCoroutine(SpawnWaveRoutine(wave));
     }
 
@@ -95,7 +177,7 @@ public class EnemySpawner : MonoBehaviour
 
         if (prefabToSpawn == null) return null;
 
-        return Instantiate(prefabToSpawn, transform.position, Quaternion.identity);
+        return ObjectPoolManager.Spawn(prefabToSpawn, transform.position, Quaternion.identity);
     }
 
     public void RefreshWaveButton()
@@ -105,17 +187,38 @@ public class EnemySpawner : MonoBehaviour
 
     private IEnumerator SpawnWaveRoutine(Wave wave)
     {
-        for (int i = 0; i < wave.enemyCount; i++)
+        if (HasConfiguredEnemies(wave))
         {
-            GameObject spawnedEnemy = SpawnEnemy(GetRandomEnemyForWave(wave));
-            if (spawnedEnemy != null)
+            foreach (WaveEnemyConfig enemyConfig in wave.enemies)
             {
-                GameManager.Instance?.RegisterEnemySpawned();
-            }
+                if (enemyConfig == null || enemyConfig.count <= 0) continue;
 
-            if (i < wave.enemyCount - 1)
+                if (enemyConfig.startDelay > 0f)
+                {
+                    yield return new WaitForSeconds(enemyConfig.startDelay);
+                }
+
+                for (int i = 0; i < enemyConfig.count; i++)
+                {
+                    SpawnConfiguredEnemy(enemyConfig);
+
+                    if (i < enemyConfig.count - 1)
+                    {
+                        yield return new WaitForSeconds(Mathf.Max(0.1f, enemyConfig.spawnInterval));
+                    }
+                }
+            }
+        }
+        else
+        {
+            for (int i = 0; i < wave.enemyCount; i++)
             {
-                yield return new WaitForSeconds(Mathf.Max(0.1f, wave.spawnInterval));
+                SpawnEnemyAndRegister(GetRandomEnemyForWave(wave));
+
+                if (i < wave.enemyCount - 1)
+                {
+                    yield return new WaitForSeconds(Mathf.Max(0.1f, wave.spawnInterval));
+                }
             }
         }
 
@@ -123,6 +226,50 @@ public class EnemySpawner : MonoBehaviour
         _spawnCoroutine = null;
         GameManager.Instance?.FinishWaveSpawning();
         UpdateStartWaveButton();
+    }
+
+    private void SpawnConfiguredEnemy(WaveEnemyConfig enemyConfig)
+    {
+        GameObject prefab = enemyConfig.enemyPrefab;
+        if (prefab == null && !string.IsNullOrWhiteSpace(enemyConfig.resourcePath))
+        {
+            prefab = Resources.Load<GameObject>(enemyConfig.resourcePath);
+        }
+
+        SpawnEnemyAndRegister(prefab);
+    }
+
+    private void SpawnEnemyAndRegister(GameObject prefab)
+    {
+        GameObject spawnedEnemy = SpawnEnemy(prefab);
+        if (spawnedEnemy != null)
+        {
+            GameManager.Instance?.RegisterEnemySpawned();
+        }
+    }
+
+    private int GetEnemyCount(Wave wave)
+    {
+        if (!HasConfiguredEnemies(wave))
+        {
+            return Mathf.Max(0, wave != null ? wave.enemyCount : 0);
+        }
+
+        int count = 0;
+        foreach (WaveEnemyConfig enemyConfig in wave.enemies)
+        {
+            if (enemyConfig != null)
+            {
+                count += Mathf.Max(0, enemyConfig.count);
+            }
+        }
+
+        return count;
+    }
+
+    private bool HasConfiguredEnemies(Wave wave)
+    {
+        return wave != null && wave.enemies != null && wave.enemies.Length > 0;
     }
 
     private GameObject GetRandomEnemyForWave(Wave wave)
@@ -155,6 +302,61 @@ public class EnemySpawner : MonoBehaviour
         {
             Debug.LogError("Enemies not found. Put enemy prefabs in Assets/Resources/Enemies.");
         }
+    }
+
+    private void EnsureWaveConfig()
+    {
+        if (!useDefaultWavesIfEmpty) return;
+
+        bool hasUsableConfig = waves != null &&
+            waves.Length > 0 &&
+            Array.Exists(waves, wave => HasConfiguredEnemies(wave) || wave.enemyPrefabs != null && wave.enemyPrefabs.Length > 0);
+
+        if (hasUsableConfig) return;
+
+        waves = new[]
+        {
+            new Wave
+            {
+                waveName = "Wave 1 - Zombies",
+                enemies = new[]
+                {
+                    CreateEnemyConfig("Zombie", "Enemies/Zombie_Enemy", 8, 0f, 1.2f)
+                }
+            },
+            new Wave
+            {
+                waveName = "Wave 2 - Fighting Dogs",
+                enemies = new[]
+                {
+                    CreateEnemyConfig("Zombie", "Enemies/Zombie_Enemy", 6, 0f, 1f),
+                    CreateEnemyConfig("Fighting Dog", "Enemies/Fighting Dog_Enemy", 5, 2f, 0.9f)
+                }
+            },
+            new Wave
+            {
+                waveName = "Wave 3 - Wizard Attack",
+                enemies = new[]
+                {
+                    CreateEnemyConfig("Zombie", "Enemies/Zombie_Enemy", 8, 0f, 0.85f),
+                    CreateEnemyConfig("Fighting Dog", "Enemies/Fighting Dog_Enemy", 6, 1.5f, 0.75f),
+                    CreateEnemyConfig("Wizard", "Enemies/Wizard_Enemy", 4, 3f, 1.4f)
+                }
+            }
+        };
+    }
+
+    private WaveEnemyConfig CreateEnemyConfig(string enemyName, string resourcePath, int count, float startDelay, float spawnInterval)
+    {
+        return new WaveEnemyConfig
+        {
+            enemyName = enemyName,
+            enemyPrefab = Resources.Load<GameObject>(resourcePath),
+            resourcePath = resourcePath,
+            count = count,
+            startDelay = startDelay,
+            spawnInterval = spawnInterval
+        };
     }
 
     private void UpdateStartWaveButton()
