@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 
 public class AllyController : MonoBehaviour
@@ -7,6 +8,9 @@ public class AllyController : MonoBehaviour
     // Поточні динамічні характеристики юніта в грі
     private float currentHp;
     private float currentMoveSpeed;
+    private Coroutine barrierWaitCoroutine;
+
+    public UnitMovementState CurrentMovementState { get; private set; } = UnitMovementState.Moving;
 
     /// <summary>
     /// Метод для ініціалізації юніта даними після спавну
@@ -18,6 +22,7 @@ public class AllyController : MonoBehaviour
         // Призначаємо стартові стато за даними ScriptableObject
         currentHp = unitData.maxHp;
         currentMoveSpeed = unitData.moveSpeed;
+        CurrentMovementState = UnitMovementState.Moving;
 
         // Змінюємо назву об'єкта на сцені для зручності
         gameObject.name = unitData.unitName;
@@ -29,7 +34,28 @@ public class AllyController : MonoBehaviour
     {
         // Тут буде ваша логіка руху союзника в стилі Tower Wars:
         // наприклад, рух вперед із швидкістю currentMoveSpeed:
+        if (CurrentMovementState == UnitMovementState.Wait) return;
+
         transform.Translate(Vector3.right * currentMoveSpeed * Time.deltaTime);
+    }
+
+    private void OnDisable()
+    {
+        if (barrierWaitCoroutine != null)
+        {
+            StopCoroutine(barrierWaitCoroutine);
+            barrierWaitCoroutine = null;
+        }
+
+        CurrentMovementState = UnitMovementState.Moving;
+    }
+
+    public void WaitAtBarrier(float duration)
+    {
+        if (duration <= 0f) return;
+        if (barrierWaitCoroutine != null) return;
+
+        barrierWaitCoroutine = StartCoroutine(BarrierWaitRoutine(duration));
     }
 
     public void TakeDamage(float damage, bool isMagic)
@@ -55,6 +81,15 @@ public class AllyController : MonoBehaviour
         {
             Die();
         }
+    }
+
+    private IEnumerator BarrierWaitRoutine(float duration)
+    {
+        CurrentMovementState = UnitMovementState.Wait;
+        yield return new WaitForSeconds(duration);
+
+        CurrentMovementState = UnitMovementState.Moving;
+        barrierWaitCoroutine = null;
     }
 
     private void Die()

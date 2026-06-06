@@ -12,10 +12,13 @@ public class EnemyAI : MonoBehaviour
     private float _nextAttackTime;
     private Coroutine _slowCoroutine;
     private Coroutine _poisonCoroutine;
+    private Coroutine _barrierWaitCoroutine;
     private Transform _targetWaypoint;
     private int _waypointIndex;
     private EnemyHealthBar _healthBar;
     private bool _isDead;
+
+    public UnitMovementState CurrentMovementState { get; private set; } = UnitMovementState.Moving;
 
     private void OnEnable()
     {
@@ -25,6 +28,12 @@ public class EnemyAI : MonoBehaviour
             _slowCoroutine = null;
         }
 
+        if (_barrierWaitCoroutine != null)
+        {
+            StopCoroutine(_barrierWaitCoroutine);
+            _barrierWaitCoroutine = null;
+        }
+
         if (data != null)
         {
             _currentHp = data.maxHp;
@@ -32,6 +41,7 @@ public class EnemyAI : MonoBehaviour
             _currentMoveSpeed = _baseMoveSpeed;
             _nextAttackTime = 0f;
             _isDead = false;
+            CurrentMovementState = UnitMovementState.Moving;
         }
         else
         {
@@ -41,6 +51,7 @@ public class EnemyAI : MonoBehaviour
             _currentMoveSpeed = _baseMoveSpeed;
             _nextAttackTime = 0f;
             _isDead = false;
+            CurrentMovementState = UnitMovementState.Moving;
         }
 
         if (Waypoints.points != null && Waypoints.points.Length > 0)
@@ -73,6 +84,13 @@ public class EnemyAI : MonoBehaviour
             _poisonCoroutine = null;
         }
 
+        if (_barrierWaitCoroutine != null)
+        {
+            StopCoroutine(_barrierWaitCoroutine);
+            _barrierWaitCoroutine = null;
+        }
+
+        CurrentMovementState = UnitMovementState.Moving;
         _healthBar?.Detach();
     }
 
@@ -88,6 +106,7 @@ public class EnemyAI : MonoBehaviour
     {
         if (data == null) return;
         if (GameManager.Instance != null && !GameManager.Instance.IsGameActive) return;
+        if (CurrentMovementState == UnitMovementState.Wait) return;
 
         MoveAlongPath();
     }
@@ -134,6 +153,15 @@ public class EnemyAI : MonoBehaviour
         }
 
         _poisonCoroutine = StartCoroutine(PoisonRoutine(damagePerTick, duration, Mathf.Max(0.1f, tickInterval)));
+    }
+
+    public void WaitAtBarrier(float duration)
+    {
+        if (_isDead) return;
+        if (duration <= 0f) return;
+        if (_barrierWaitCoroutine != null) return;
+
+        _barrierWaitCoroutine = StartCoroutine(BarrierWaitRoutine(duration));
     }
 
     private void MoveAlongPath()
@@ -223,6 +251,15 @@ public class EnemyAI : MonoBehaviour
         }
 
         _poisonCoroutine = null;
+    }
+
+    private IEnumerator BarrierWaitRoutine(float duration)
+    {
+        CurrentMovementState = UnitMovementState.Wait;
+        yield return new WaitForSeconds(duration);
+
+        CurrentMovementState = UnitMovementState.Moving;
+        _barrierWaitCoroutine = null;
     }
 
     private void ApplyHealthDamage(float amount)

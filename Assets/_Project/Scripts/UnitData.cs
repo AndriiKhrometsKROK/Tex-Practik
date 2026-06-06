@@ -13,6 +13,10 @@ public class UnitData : ScriptableObject
     public float moveSpeed;
     public int goldReward;
 
+    [Header("Income Settings")]
+    [Min(0)] public int essenceCost = 10;
+    [Min(0)] public int goldPerSecondIncrease = 1;
+
     [Header("Combat Stats")]
     public float minDamage;
     public float maxDamage;

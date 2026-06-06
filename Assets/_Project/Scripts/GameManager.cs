@@ -22,6 +22,7 @@ public class GameManager : MonoBehaviour
 
     [Header("Economy")]
     public int currentGold = 100;
+    public IncomeManager incomeManager;
 
     [Header("Base Health")]
     public float maxBaseHealth = 100f;
@@ -47,6 +48,7 @@ public class GameManager : MonoBehaviour
         if (Instance == null)
         {
             Instance = this;
+            EnsureIncomeManager();
         }
         else
         {
@@ -63,6 +65,8 @@ public class GameManager : MonoBehaviour
         {
             enemySpawner = FindAnyObjectByType<EnemySpawner>();
         }
+
+        EnsureIncomeManager();
 
         GoldChanged?.Invoke(currentGold);
         BaseHealthChanged?.Invoke(currentBaseHealth, maxBaseHealth);
@@ -215,5 +219,20 @@ public class GameManager : MonoBehaviour
 
         baseHealthSlider.maxValue = maxBaseHealth;
         baseHealthSlider.value = currentBaseHealth;
+    }
+
+    private void EnsureIncomeManager()
+    {
+        if (incomeManager != null) return;
+
+        if (!TryGetComponent(out incomeManager))
+        {
+            incomeManager = FindAnyObjectByType<IncomeManager>();
+        }
+
+        if (incomeManager == null)
+        {
+            incomeManager = gameObject.AddComponent<IncomeManager>();
+        }
     }
 }
