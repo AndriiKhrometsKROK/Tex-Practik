@@ -39,14 +39,17 @@ public class SpellEffect : MonoBehaviour
 
     void ApplyAOE()
     {
-        Collider2D[] hitEnemies = Physics2D.OverlapCircleAll(transform.position, radius);
-        foreach (Collider2D enemy in hitEnemies)
+        Collider2D[] hits = Physics2D.OverlapCircleAll(transform.position, radius);
+        foreach (Collider2D hit in hits)
         {
-            if (enemy.CompareTag("Enemy"))
+            EnemyAI enemy = hit.GetComponentInParent<EnemyAI>();
+            if (enemy != null)
             {
-                enemy.GetComponent<EnemyAI>()?.TakeDamage(damage);
-                Debug.Log("Magic hit: " + enemy.name);
+                enemy.TakeDamage(damage, true);
+                continue;
             }
+
+            hit.GetComponentInParent<EnemyCastle>()?.TakeDamage(damage);
         }
     }
 
@@ -55,6 +58,26 @@ public class SpellEffect : MonoBehaviour
         if (!isAOE)
         {
             transform.position += transform.right * 10f * Time.deltaTime;
+        }
+    }
+
+    private void OnTriggerEnter2D(Collider2D other)
+    {
+        if (isAOE) return;
+
+        EnemyAI enemy = other.GetComponentInParent<EnemyAI>();
+        if (enemy != null)
+        {
+            enemy.TakeDamage(damage, true);
+            ObjectPoolManager.Return(gameObject);
+            return;
+        }
+
+        EnemyCastle castle = other.GetComponentInParent<EnemyCastle>();
+        if (castle != null)
+        {
+            castle.TakeDamage(damage);
+            ObjectPoolManager.Return(gameObject);
         }
     }
 

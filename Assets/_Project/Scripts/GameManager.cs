@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -18,6 +19,7 @@ public class GameManager : MonoBehaviour
     public event Action<int> GoldChanged;
     public event Action<float, float> BaseHealthChanged;
     public event Action<int, int> WaveChanged;
+    public event Action<int> NextWaveCountdownChanged;
     public event Action<GameState> StateChanged;
 
     [Header("Economy")]
@@ -32,11 +34,15 @@ public class GameManager : MonoBehaviour
     [Header("Waves")]
     public EnemySpawner enemySpawner;
     public bool autoStartWaves = true;
+    [Min(1f)] public float nextWaveDelay = 20f;
 
     public GameState CurrentState { get; private set; } = GameState.Preparing;
     public int CurrentWaveIndex { get; private set; } = -1;
     public int EnemiesAlive { get; private set; }
     public int EnemiesRemainingToSpawn { get; private set; }
+    public float NextWaveTimeRemaining { get; private set; }
+
+    private int _lastCountdownSecond = -1;
 
     public bool IsGameActive =>
         CurrentState == GameState.Preparing ||
@@ -58,6 +64,11 @@ public class GameManager : MonoBehaviour
 
     private void Start()
     {
+        PresentationBootstrapper.EnsureGameplayPresentation(this);
+        StartCoroutine(EnsurePresentationNextFrame());
+
+        currentGold = Mathf.Max(currentGold, 350);
+        maxBaseHealth = Mathf.Max(maxBaseHealth, 250f);
         currentBaseHealth = maxBaseHealth;
         UpdateBaseHealthUI();
 
@@ -73,6 +84,31 @@ public class GameManager : MonoBehaviour
         StateChanged?.Invoke(CurrentState);
 
         if (autoStartWaves)
+        {
+            SetState(GameState.WaitingForNextWave);
+            enemySpawner?.RefreshWaveButton();
+        }
+    }
+
+    private IEnumerator EnsurePresentationNextFrame()
+    {
+        yield return null;
+        PresentationBootstrapper.EnsureGameplayPresentation(this);
+    }
+
+    private void Update()
+    {
+        if (CurrentState != GameState.WaitingForNextWave || !autoStartWaves) return;
+
+        NextWaveTimeRemaining = Mathf.Max(0f, NextWaveTimeRemaining - Time.deltaTime);
+        int seconds = Mathf.CeilToInt(NextWaveTimeRemaining);
+        if (seconds != _lastCountdownSecond)
+        {
+            _lastCountdownSecond = seconds;
+            NextWaveCountdownChanged?.Invoke(seconds);
+        }
+
+        if (NextWaveTimeRemaining <= 0f)
         {
             enemySpawner?.StartNextWave();
         }
@@ -100,6 +136,7 @@ public class GameManager : MonoBehaviour
         }
 
         Debug.Log("Not enough gold.");
+        GameplayNotificationController.Show("Недостатньо золота");
         return false;
     }
 
@@ -183,7 +220,7 @@ public class GameManager : MonoBehaviour
 
         SetState(GameState.WaitingForNextWave);
         enemySpawner.RefreshWaveButton();
-        Debug.Log("Wave cleared. Press the next wave button to continue.");
+        Debug.Log("Wave cleared. The next wave is preparing.");
     }
 
     private void RegisterEnemyRemoved()
@@ -210,6 +247,18 @@ public class GameManager : MonoBehaviour
         if (CurrentState == newState) return;
 
         CurrentState = newState;
+        if (newState == GameState.WaitingForNextWave)
+        {
+            NextWaveTimeRemaining = Mathf.Max(1f, nextWaveDelay);
+            _lastCountdownSecond = Mathf.CeilToInt(NextWaveTimeRemaining);
+            NextWaveCountdownChanged?.Invoke(_lastCountdownSecond);
+        }
+        else
+        {
+            NextWaveTimeRemaining = 0f;
+            _lastCountdownSecond = -1;
+        }
+
         StateChanged?.Invoke(CurrentState);
     }
 

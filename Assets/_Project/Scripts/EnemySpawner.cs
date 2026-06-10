@@ -185,6 +185,18 @@ public class EnemySpawner : MonoBehaviour
         UpdateStartWaveButton();
     }
 
+    public void ConfigureMvpWaves()
+    {
+        if (waves == null || waves.Length < 3) return;
+
+        SetEnemyCount(waves[0], 0, 4);
+        SetEnemyCount(waves[1], 0, 3);
+        SetEnemyCount(waves[1], 1, 2);
+        SetEnemyCount(waves[2], 0, 4);
+        SetEnemyCount(waves[2], 1, 3);
+        SetEnemyCount(waves[2], 2, 1);
+    }
+
     private IEnumerator SpawnWaveRoutine(Wave wave)
     {
         if (HasConfiguredEnemies(wave))
@@ -244,6 +256,12 @@ public class EnemySpawner : MonoBehaviour
         GameObject spawnedEnemy = SpawnEnemy(prefab);
         if (spawnedEnemy != null)
         {
+            EnemyAI enemy = spawnedEnemy.GetComponent<EnemyAI>();
+            if (enemy != null)
+            {
+                enemy.SetLane(BattleLane.Lower);
+            }
+
             GameManager.Instance?.RegisterEnemySpawned();
         }
     }
@@ -357,6 +375,14 @@ public class EnemySpawner : MonoBehaviour
             startDelay = startDelay,
             spawnInterval = spawnInterval
         };
+    }
+
+    private static void SetEnemyCount(Wave wave, int enemyIndex, int count)
+    {
+        if (wave == null || wave.enemies == null || enemyIndex < 0 || enemyIndex >= wave.enemies.Length) return;
+        if (wave.enemies[enemyIndex] == null) return;
+
+        wave.enemies[enemyIndex].count = Mathf.Max(0, count);
     }
 
     private void UpdateStartWaveButton()

@@ -26,7 +26,8 @@ public static class RuntimeUiBootstrapper
 
         if (gameManager != null)
         {
-            EnsureGameplayHud();
+            // PresentationBootstrapper owns the gameplay UI.
+            return;
         }
     }
 
@@ -41,7 +42,7 @@ public static class RuntimeUiBootstrapper
         RectTransform root = CreatePanel("Menu Root", canvas.transform, new Color(0.06f, 0.07f, 0.08f, 0.96f));
         Stretch(root);
 
-        TextMeshProUGUI title = CreateText("Title", root, "Gay TD", 72f, TextAlignmentOptions.Center);
+        TextMeshProUGUI title = CreateText("Title", root, "KenomArch: Петля Небуття", 72f, TextAlignmentOptions.Center);
         SetRect(title.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 150f), new Vector2(600f, 110f));
 
         Button playButton = CreateButton("Play Button", root, "Грати");

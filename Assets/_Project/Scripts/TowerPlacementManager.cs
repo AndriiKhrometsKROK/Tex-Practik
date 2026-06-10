@@ -9,6 +9,7 @@ public class TowerPlacementManager : MonoBehaviour
     [Header("Build Settings")]
     public float gridSize = 1f;
     public LayerMask obstacleLayer;
+    [SerializeField, Min(0.1f)] private float buildSlotRadius = 0.4f;
 
     [Header("Tower Menu")]
     [SerializeField] private float sellRefundMultiplier = 0.6f;
@@ -86,7 +87,9 @@ public class TowerPlacementManager : MonoBehaviour
         _ghostTower.transform.position = snappedPos;
         ShowRange(snappedPos, _towerToBuild.attackRadius, buildRangeColor);
 
-        bool canBuild = !Physics2D.OverlapCircle(snappedPos, 0.2f, obstacleLayer);
+        bool canBuild = IsInsideBuildZone(snappedPos) &&
+            !Physics2D.OverlapCircle(snappedPos, 0.35f, obstacleLayer) &&
+            !IsBuildSlotOccupied(snappedPos);
 
         if (_ghostRenderer != null)
         {
@@ -123,7 +126,37 @@ public class TowerPlacementManager : MonoBehaviour
         else
         {
             Debug.LogWarning("Not enough gold to build this tower.");
+            GameplayNotificationController.Show("Недостатньо золота для цієї башти");
         }
+    }
+
+    private bool IsInsideBuildZone(Vector2 position)
+    {
+        float[] slotColumns = { 1f, 5f, 7f };
+        float[] slotRows = { -3f, -1f, 1f, 3f };
+        foreach (float x in slotColumns)
+        {
+            foreach (float y in slotRows)
+            {
+                if (Vector2.Distance(position, new Vector2(x, y)) <= buildSlotRadius)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private bool IsBuildSlotOccupied(Vector2 position)
+    {
+        foreach (TowerController tower in FindObjectsByType<TowerController>(FindObjectsSortMode.None))
+        {
+            if (tower == null || tower.gameObject == _ghostTower) continue;
+            if (Vector2.Distance(tower.transform.position, position) < 0.65f) return true;
+        }
+
+        return false;
     }
 
     private void DeselectTower()
@@ -193,6 +226,11 @@ public class TowerPlacementManager : MonoBehaviour
     private void RefreshTowerMenu()
     {
         if (_selectedTower == null || _selectedTower.data == null) return;
+        if (_sellButton == null || _upgradeButton == null || _sellButtonText == null || _upgradeButtonText == null)
+        {
+            CloseTowerMenu();
+            return;
+        }
 
         TowerData currentData = _selectedTower.data;
         int refund = Mathf.RoundToInt(currentData.cost * sellRefundMultiplier);
@@ -322,7 +360,7 @@ public class TowerPlacementManager : MonoBehaviour
         label.resizeTextForBestFit = true;
         label.resizeTextMinSize = 10;
         label.resizeTextMaxSize = 15;
-        label.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+        label.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
 
         return button;
     }

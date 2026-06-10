@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 77754f5f1048491d965b95efecc4a71f, type: 3}
+  m_Name: VisualAssetCatalog
+  m_EditorClassIdentifier: 
+  allyCastle: {fileID: -9111727411753443758, guid: 88663afd6a4f76e45a81f6b7bc55792b, type: 3}
+  enemyCastle: {fileID: -2693960955063312873, guid: bda4d0de670e8834cb9f0c33e26df324, type: 3}
+  heroPrefab: {fileID: 255279455428188671, guid: e770a6494276f004cb472666ac440d3a, type: 3}
+  tinyGround: {fileID: 2800000, guid: a8f1c2d3e4f5467890abcdef12345678, type: 3}
+  tinyWater: {fileID: 2800000, guid: b8f1c2d3e4f5467890abcdef12345678, type: 3}
+  tinyTree: {fileID: 2800000, guid: c8f1c2d3e4f5467890abcdef12345678, type: 3}
+  tinyAllyCastle: {fileID: 2800000, guid: d8f1c2d3e4f5467890abcdef12345678, type: 3}
+  tinyEnemyCastle: {fileID: 2800000, guid: e8f1c2d3e4f5467890abcdef12345678, type: 3}

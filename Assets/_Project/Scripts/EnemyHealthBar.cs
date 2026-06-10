@@ -28,7 +28,10 @@ public class EnemyHealthBar : MonoBehaviour
     public void Detach()
     {
         _target = null;
-        gameObject.SetActive(false);
+        if (this != null && gameObject != null)
+        {
+            gameObject.SetActive(false);
+        }
     }
 
     public void UpdateHealth(float currentHealth, float maxHealth)

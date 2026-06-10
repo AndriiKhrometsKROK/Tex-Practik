@@ -1,3 +1,5 @@
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 public class AllySpawner : MonoBehaviour
@@ -48,18 +50,7 @@ public class AllySpawner : MonoBehaviour
             }
         }
 
-        Vector3 position = spawnPoint != null ? spawnPoint.position : Vector3.zero;
-        GameObject spawnedUnit = Instantiate(data.unitPrefab, position, Quaternion.identity);
-        EnsureTriggerCollider(spawnedUnit);
-
-        if (spawnedUnit.TryGetComponent<AllyController>(out var controller))
-        {
-            controller.Initialize(data);
-        }
-        else
-        {
-            Debug.LogWarning($"Prefab {data.unitPrefab.name} does not have AllyController.");
-        }
+        SpawnQueuedAlly(data);
 
         if (spendEssenceToSpawn && incomeManager != null)
         {
@@ -67,6 +58,39 @@ public class AllySpawner : MonoBehaviour
         }
 
         return true;
+    }
+
+    public IEnumerator SpawnWave(IEnumerable<QueuedAlly> units, float spawnInterval = 0.35f)
+    {
+        if (units == null) yield break;
+
+        foreach (QueuedAlly unit in units)
+        {
+            SpawnQueuedAlly(unit.Unit, unit.Lane);
+            yield return new WaitForSeconds(Mathf.Max(0.05f, spawnInterval));
+        }
+    }
+
+    public GameObject SpawnQueuedAlly(UnitData data, BattleLane lane = BattleLane.Upper)
+    {
+        if (data == null || data.unitPrefab == null) return null;
+
+        Vector3 position = spawnPoint != null ? spawnPoint.position : transform.position;
+        position.x = BattleLaneUtility.GetX(lane);
+        GameObject spawnedUnit = Instantiate(data.unitPrefab, position, Quaternion.identity);
+        EnsureTriggerCollider(spawnedUnit);
+
+        if (spawnedUnit.TryGetComponent<AllyController>(out var controller))
+        {
+            controller.Initialize(data);
+            controller.SetLane(lane);
+        }
+        else
+        {
+            Debug.LogWarning($"Prefab {data.unitPrefab.name} does not have AllyController.");
+        }
+
+        return spawnedUnit;
     }
 
     private void EnsureTriggerCollider(GameObject spawnedUnit)

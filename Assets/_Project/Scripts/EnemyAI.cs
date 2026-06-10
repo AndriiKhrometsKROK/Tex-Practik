@@ -5,6 +5,9 @@ public class EnemyAI : MonoBehaviour
 {
     public UnitData data;
     [SerializeField] private EnemyHealthBar healthBarPrefab;
+    [Header("Combat")]
+    [SerializeField, Min(0.1f)] private float allyAttackRange = 1.1f;
+    [SerializeField, Min(0.05f)] private float allyScanInterval = 0.2f;
 
     private float _currentHp;
     private float _baseMoveSpeed;
@@ -17,8 +20,27 @@ public class EnemyAI : MonoBehaviour
     private int _waypointIndex;
     private EnemyHealthBar _healthBar;
     private bool _isDead;
+    private float _nextAllyScanTime;
+    private AllyController _allyTarget;
+    private float _laneX;
 
     public UnitMovementState CurrentMovementState { get; private set; } = UnitMovementState.Moving;
+    public bool IsAlive => !_isDead && gameObject.activeInHierarchy;
+
+    public void SetLane(BattleLane lane)
+    {
+        _laneX = BattleLaneUtility.GetX(lane);
+        Vector3 position = transform.position;
+        position.x = _laneX;
+        transform.position = position;
+        transform.localScale = Vector3.one * 0.72f;
+
+        int sortingOrder = lane == BattleLane.Upper ? 8 : 11;
+        foreach (SpriteRenderer renderer in GetComponentsInChildren<SpriteRenderer>())
+        {
+            renderer.sortingOrder = sortingOrder;
+        }
+    }
 
     private void OnEnable()
     {
@@ -41,6 +63,8 @@ public class EnemyAI : MonoBehaviour
             _currentMoveSpeed = _baseMoveSpeed;
             _nextAttackTime = 0f;
             _isDead = false;
+            _allyTarget = null;
+            _nextAllyScanTime = 0f;
             CurrentMovementState = UnitMovementState.Moving;
         }
         else
@@ -51,6 +75,8 @@ public class EnemyAI : MonoBehaviour
             _currentMoveSpeed = _baseMoveSpeed;
             _nextAttackTime = 0f;
             _isDead = false;
+            _allyTarget = null;
+            _nextAllyScanTime = 0f;
             CurrentMovementState = UnitMovementState.Moving;
         }
 
@@ -91,7 +117,11 @@ public class EnemyAI : MonoBehaviour
         }
 
         CurrentMovementState = UnitMovementState.Moving;
-        _healthBar?.Detach();
+        _allyTarget = null;
+        if (_healthBar != null)
+        {
+            _healthBar.Detach();
+        }
     }
 
     private void OnDestroy()
@@ -99,6 +129,7 @@ public class EnemyAI : MonoBehaviour
         if (_healthBar != null)
         {
             Destroy(_healthBar.gameObject);
+            _healthBar = null;
         }
     }
 
@@ -108,6 +139,14 @@ public class EnemyAI : MonoBehaviour
         if (GameManager.Instance != null && !GameManager.Instance.IsGameActive) return;
         if (CurrentMovementState == UnitMovementState.Wait) return;
 
+        RefreshAllyTarget();
+        if (CanAttackAlly())
+        {
+            AttackAlly();
+            return;
+        }
+
+        _allyTarget = null;
         MoveAlongPath();
     }
 
@@ -170,11 +209,11 @@ public class EnemyAI : MonoBehaviour
 
         transform.position = Vector2.MoveTowards(
             transform.position,
-            _targetWaypoint.position,
+            new Vector2(_laneX, _targetWaypoint.position.y),
             _currentMoveSpeed * Time.deltaTime
         );
 
-        if (Vector2.Distance(transform.position, _targetWaypoint.position) <= 0.1f)
+        if (Vector2.Distance(transform.position, new Vector2(_laneX, _targetWaypoint.position.y)) <= 0.1f)
         {
             GetNextWaypoint();
         }
@@ -227,6 +266,53 @@ public class EnemyAI : MonoBehaviour
             other.GetComponent<PlayerHealth>()?.TakeDamage(randomDamage);
             _nextAttackTime = Time.time + data.attackRate;
         }
+    }
+
+    private void RefreshAllyTarget()
+    {
+        if (CanAttackAlly() || Time.time < _nextAllyScanTime) return;
+
+        _nextAllyScanTime = Time.time + allyScanInterval;
+        _allyTarget = FindNearestAlly();
+    }
+
+    private AllyController FindNearestAlly()
+    {
+        Collider2D[] hits = Physics2D.OverlapCircleAll(transform.position, allyAttackRange);
+        AllyController nearest = null;
+        float nearestDistance = float.MaxValue;
+
+        foreach (Collider2D hit in hits)
+        {
+            AllyController ally = hit.GetComponentInParent<AllyController>();
+            if (ally == null || !ally.IsAlive) continue;
+
+            float distance = ((Vector2)ally.transform.position - (Vector2)transform.position).sqrMagnitude;
+            if (distance >= nearestDistance) continue;
+
+            nearest = ally;
+            nearestDistance = distance;
+        }
+
+        return nearest;
+    }
+
+    private bool CanAttackAlly()
+    {
+        return _allyTarget != null &&
+            _allyTarget.isActiveAndEnabled &&
+            _allyTarget.IsAlive &&
+            Vector2.Distance(transform.position, _allyTarget.transform.position) <= allyAttackRange;
+    }
+
+    private void AttackAlly()
+    {
+        if (Time.time < _nextAttackTime || data == null) return;
+
+        float minimum = Mathf.Max(1f, data.minDamage);
+        float maximum = Mathf.Max(minimum, data.maxDamage);
+        _allyTarget.TakeDamage(Random.Range(minimum, maximum), false);
+        _nextAttackTime = Time.time + Mathf.Max(0.15f, data.attackRate);
     }
 
     private IEnumerator SlowRoutine(float slowFactor, float duration)
