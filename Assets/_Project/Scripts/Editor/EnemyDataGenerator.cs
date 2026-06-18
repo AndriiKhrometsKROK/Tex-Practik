@@ -1,3 +1,4 @@
+// Editor-утиліта для генерації та оновлення конфігурацій ворожих юнітів.
 #if UNITY_EDITOR
 using UnityEngine;
 using UnityEditor;

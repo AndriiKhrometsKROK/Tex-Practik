@@ -1,3 +1,4 @@
+// Показує короткі системні повідомлення: нестачу ресурсів, результати покупок і важливі події бою.
 using System.Collections;
 using TMPro;
 using UnityEngine;

@@ -20,3 +20,6 @@ MonoBehaviour:
   tinyTree: {fileID: 2800000, guid: c8f1c2d3e4f5467890abcdef12345678, type: 3}
   tinyAllyCastle: {fileID: 2800000, guid: d8f1c2d3e4f5467890abcdef12345678, type: 3}
   tinyEnemyCastle: {fileID: 2800000, guid: e8f1c2d3e4f5467890abcdef12345678, type: 3}
+  tinyHeroSheet: {fileID: 2800000, guid: 8409b0072ce6ca74dbbf24e860f476b4, type: 3}
+  tinyLibrary: {fileID: 2800000, guid: 2afc8e9af6b91c94eb4ffe312e17fa09, type: 3}
+  tinyDemonTower: {fileID: 2800000, guid: f0175cd1e428d8b4695741b814944fdd, type: 3}

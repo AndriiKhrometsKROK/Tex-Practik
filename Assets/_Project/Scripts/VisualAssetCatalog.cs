@@ -1,6 +1,7 @@
+// Централізований каталог посилань на основні візуальні ассети, які використовує рантайм-збірка сцен.
 using UnityEngine;
 
-[CreateAssetMenu(fileName = "VisualAssetCatalog", menuName = "KenomArch/Visual Asset Catalog")]
+[CreateAssetMenu(fileName = "VisualAssetCatalog", menuName = "Echoes of the Void/Visual Asset Catalog")]
 public class VisualAssetCatalog : ScriptableObject
 {
     public Sprite allyCastle;
@@ -11,4 +12,7 @@ public class VisualAssetCatalog : ScriptableObject
     public Texture2D tinyTree;
     public Texture2D tinyAllyCastle;
     public Texture2D tinyEnemyCastle;
+    public Texture2D tinyHeroSheet;
+    public Texture2D tinyLibrary;
+    public Texture2D tinyDemonTower;
 }

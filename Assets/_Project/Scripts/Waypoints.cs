@@ -1,3 +1,4 @@
+// Зберігає сумісний зі старими сценами список контрольних точок маршруту.
 using UnityEngine;
 
 public class Waypoints : MonoBehaviour

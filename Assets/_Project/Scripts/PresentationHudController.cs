@@ -1,3 +1,4 @@
+// Синхронізує презентаційний HUD із золотом, здоров'ям замку, хвилею та поточною фазою матчу.
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -84,7 +85,7 @@ public class PresentationHudController : MonoBehaviour
             EnemySpawner spawner = gameManager.enemySpawner != null
                 ? gameManager.enemySpawner
                 : FindAnyObjectByType<EnemySpawner>();
-            int total = spawner != null && spawner.waves != null ? spawner.waves.Length : 0;
+            int total = spawner != null && spawner.HasRemainingWaves ? 0 : spawner != null && spawner.waves != null ? spawner.waves.Length : 0;
             UpdateWave(gameManager.CurrentWaveIndex + 1, total);
         }
 
@@ -124,7 +125,11 @@ public class PresentationHudController : MonoBehaviour
 
     private void UpdateWave(int current, int total)
     {
-        if (waveText != null) waveText.text = $"{Mathf.Max(0, current)} / {Mathf.Max(0, total)}";
+        if (waveText != null)
+        {
+            int safeCurrent = Mathf.Max(0, current);
+            waveText.text = total <= 0 ? $"{safeCurrent} / ∞" : $"{safeCurrent} / {Mathf.Max(0, total)}";
+        }
     }
 
     private void UpdateState(GameState state)

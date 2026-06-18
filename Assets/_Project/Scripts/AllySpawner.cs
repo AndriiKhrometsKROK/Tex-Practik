@@ -1,3 +1,4 @@
+// Створює союзних юнітів із черги та випускає їх на вибрану бойову лінію.
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -77,13 +78,18 @@ public class AllySpawner : MonoBehaviour
 
         Vector3 position = spawnPoint != null ? spawnPoint.position : transform.position;
         position.x = BattleLaneUtility.GetX(lane);
-        GameObject spawnedUnit = Instantiate(data.unitPrefab, position, Quaternion.identity);
+        GameObject spawnedUnit = ObjectPoolManager.Spawn(data.unitPrefab, position, Quaternion.identity);
+        if (spawnedUnit == null) return null;
         EnsureTriggerCollider(spawnedUnit);
 
         if (spawnedUnit.TryGetComponent<AllyController>(out var controller))
         {
             controller.Initialize(data);
             controller.SetLane(lane);
+            if (BattleFlowController.Instance != null)
+            {
+                controller.ApplyPermanentMultiplier(BattleFlowController.Instance.AllyPowerMultiplier);
+            }
         }
         else
         {

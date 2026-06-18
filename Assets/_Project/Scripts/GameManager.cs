@@ -1,6 +1,8 @@
+// Центральний координатор матчу: ресурси, хвилі, стан гри, здоров'я бази, перемога й поразка.
 using System;
 using System.Collections;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 public enum GameState
@@ -21,6 +23,7 @@ public class GameManager : MonoBehaviour
     public event Action<int, int> WaveChanged;
     public event Action<int> NextWaveCountdownChanged;
     public event Action<GameState> StateChanged;
+    public event Action<UnitData> EnemyDefeated;
 
     [Header("Economy")]
     public int currentGold = 100;
@@ -43,6 +46,9 @@ public class GameManager : MonoBehaviour
     public float NextWaveTimeRemaining { get; private set; }
 
     private int _lastCountdownSecond = -1;
+    private int _lastRewardedWaveIndex = -1;
+    private BattleFlowController battleFlow;
+    private bool trainingMode;
 
     public bool IsGameActive =>
         CurrentState == GameState.Preparing ||
@@ -66,9 +72,17 @@ public class GameManager : MonoBehaviour
     {
         PresentationBootstrapper.EnsureGameplayPresentation(this);
         StartCoroutine(EnsurePresentationNextFrame());
+        trainingMode = TrainingGroundState.IsActive;
 
-        currentGold = Mathf.Max(currentGold, 350);
+        int campaignLevel = CampaignProgress.SelectedLevel;
+        currentGold = Mathf.Max(currentGold, 500 + (campaignLevel - 1) * 75);
         maxBaseHealth = Mathf.Max(maxBaseHealth, 250f);
+        if (trainingMode)
+        {
+            currentGold = 999999;
+            maxBaseHealth = Mathf.Max(maxBaseHealth, 999999f);
+            autoStartWaves = false;
+        }
         currentBaseHealth = maxBaseHealth;
         UpdateBaseHealthUI();
 
@@ -76,12 +90,30 @@ public class GameManager : MonoBehaviour
         {
             enemySpawner = FindAnyObjectByType<EnemySpawner>();
         }
+        ApplyLevelPacing();
 
         EnsureIncomeManager();
+        if (!trainingMode)
+        {
+            EnsureBattleFlow();
+        }
+        else
+        {
+            foreach (BattleFlowController flow in FindObjectsByType<BattleFlowController>(FindObjectsSortMode.None))
+            {
+                Destroy(flow.gameObject);
+            }
+        }
 
         GoldChanged?.Invoke(currentGold);
         BaseHealthChanged?.Invoke(currentBaseHealth, maxBaseHealth);
         StateChanged?.Invoke(CurrentState);
+
+        if (trainingMode)
+        {
+            TrainingGroundController trainingGround = gameObject.AddComponent<TrainingGroundController>();
+            trainingGround.Configure(this);
+        }
 
         if (autoStartWaves)
         {
@@ -98,6 +130,13 @@ public class GameManager : MonoBehaviour
 
     private void Update()
     {
+        if ((CurrentState == GameState.Victory || CurrentState == GameState.Defeat) &&
+            Input.GetKeyDown(KeyCode.Escape))
+        {
+            SceneManager.LoadScene("SampleScene");
+            return;
+        }
+
         if (CurrentState != GameState.WaitingForNextWave || !autoStartWaves) return;
 
         NextWaveTimeRemaining = Mathf.Max(0f, NextWaveTimeRemaining - Time.deltaTime);
@@ -132,6 +171,7 @@ public class GameManager : MonoBehaviour
             currentGold -= amount;
             GoldChanged?.Invoke(currentGold);
             Debug.Log("Purchase successful. Gold left: " + currentGold);
+            GameAudioController.PlaySfx(GameSfxCue.Purchase, 0.7f);
             return true;
         }
 
@@ -140,20 +180,34 @@ public class GameManager : MonoBehaviour
         return false;
     }
 
+    public void SetGoldForTesting(int amount)
+    {
+        currentGold = Mathf.Max(0, amount);
+        GoldChanged?.Invoke(currentGold);
+    }
+
     public bool CanStartNextWave()
     {
         return CurrentState == GameState.Preparing || CurrentState == GameState.WaitingForNextWave;
     }
 
+    // Фіксуємо очікувану кількість ворогів, щоб завершити хвилю лише після спавну та видалення кожного з них.
     public void BeginWave(int waveNumber, int totalWaves, int enemiesToSpawn)
     {
+        if (trainingMode) return;
         if (CurrentState == GameState.Victory || CurrentState == GameState.Defeat) return;
 
         CurrentWaveIndex = waveNumber - 1;
         EnemiesRemainingToSpawn = enemiesToSpawn;
+        battleFlow?.HandleWaveStarted();
         WaveChanged?.Invoke(waveNumber, totalWaves);
         SetState(GameState.WaveInProgress);
         Debug.Log($"Wave {waveNumber}/{totalWaves} started.");
+    }
+
+    public void BeginBossBattle()
+    {
+        SetState(GameState.WaveInProgress);
     }
 
     public void FinishWaveSpawning()
@@ -164,6 +218,7 @@ public class GameManager : MonoBehaviour
 
     public void DamageBase(float amount)
     {
+        if (trainingMode) return;
         if (CurrentState == GameState.Victory || CurrentState == GameState.Defeat) return;
         if (amount <= 0f) return;
 
@@ -173,6 +228,14 @@ public class GameManager : MonoBehaviour
 
         if (currentBaseHealth <= 0f)
         {
+            if (battleFlow != null && battleFlow.TryTriggerForcedFinale())
+            {
+                currentBaseHealth = maxBaseHealth;
+                UpdateBaseHealthUI();
+                BaseHealthChanged?.Invoke(currentBaseHealth, maxBaseHealth);
+                return;
+            }
+
             SetDefeat("Base destroyed.");
         }
     }
@@ -198,20 +261,40 @@ public class GameManager : MonoBehaviour
             AddGold(data.goldReward);
         }
 
+        EnemyDefeated?.Invoke(data);
         RegisterEnemyRemoved();
     }
 
-    public void EnemyReachedBase(UnitData data)
+    public void EnemyReachedBase(UnitData data, float damageMultiplier = 1f)
     {
-        float damage = data != null ? data.towerDamage : 1f;
+        float damage = (data != null ? data.towerDamage : 1f) * Mathf.Max(0.1f, damageMultiplier);
         DamageBase(damage);
         RegisterEnemyRemoved();
     }
 
+    public void RegisterEnemyRemovedWithoutReward()
+    {
+        RegisterEnemyRemoved();
+    }
+
+    public void RewardAttackFrontHit(UnitData data)
+    {
+        if (data == null) return;
+        AddGold(Mathf.Max(1, Mathf.CeilToInt(data.essenceCost * 0.05f)));
+    }
+
+    // Хвиля вважається завершеною, коли спавнер закінчив роботу, а живих зареєстрованих ворогів не залишилося.
     private void CheckWaveCompletion()
     {
         if (EnemiesRemainingToSpawn > 0 || EnemiesAlive > 0) return;
+        if (enemySpawner != null && enemySpawner.IsFinalDistortion) return;
+        if (battleFlow != null &&
+            (battleFlow.Phase == BattlePhase.BossBattle || battleFlow.Phase == BattlePhase.Finale))
+        {
+            return;
+        }
 
+        RewardWaveClear();
         if (enemySpawner == null || !enemySpawner.HasRemainingWaves)
         {
             SetVictory();
@@ -231,14 +314,22 @@ public class GameManager : MonoBehaviour
 
     public void SetVictory()
     {
+        if (CurrentState == GameState.Victory || CurrentState == GameState.Defeat) return;
+        if (trainingMode) return;
+        CampaignProgress.CompleteSelectedLevel();
         SetState(GameState.Victory);
+        GameAudioController.PlaySfx(GameSfxCue.Victory, 0.9f);
+        enemySpawner?.StopAllSpawning();
         enemySpawner?.RefreshWaveButton();
         Debug.Log("Victory! All waves cleared.");
     }
 
     private void SetDefeat(string reason)
     {
+        if (CurrentState == GameState.Defeat) return;
+        CampaignProgress.RecordDefeat();
         SetState(GameState.Defeat);
+        enemySpawner?.StopAllSpawning();
         Debug.Log("Defeat: " + reason);
     }
 
@@ -283,5 +374,36 @@ public class GameManager : MonoBehaviour
         {
             incomeManager = gameObject.AddComponent<IncomeManager>();
         }
+    }
+
+    private void EnsureBattleFlow()
+    {
+        battleFlow = FindAnyObjectByType<BattleFlowController>();
+        if (battleFlow == null)
+        {
+            battleFlow = new GameObject("Battle Flow Controller").AddComponent<BattleFlowController>();
+        }
+        battleFlow.Configure(this, enemySpawner);
+    }
+
+    // Рівень кампанії впливає не лише на ворогів, а й на стартовий темп економіки та підготовки.
+    private void ApplyLevelPacing()
+    {
+        CampaignLevelRule rule = CampaignLevelRules.Get(CampaignProgress.SelectedLevel);
+        float levelT = Mathf.Clamp01((rule.Level - 1f) / Mathf.Max(1f, CampaignProgress.FinalLevel - 1f));
+        nextWaveDelay = Mathf.Lerp(24f, 11f, levelT);
+        if (rule.Mutators.HasFlag(LevelMutator.Relentless))
+        {
+            nextWaveDelay = Mathf.Max(8f, nextWaveDelay * 0.75f);
+        }
+    }
+
+    private void RewardWaveClear()
+    {
+        if (CurrentWaveIndex < 0 || CurrentWaveIndex == _lastRewardedWaveIndex) return;
+        _lastRewardedWaveIndex = CurrentWaveIndex;
+        int essenceReward = 18 + Mathf.Max(0, CurrentWaveIndex) * 4;
+        incomeManager?.AddEssence(essenceReward);
+        GameplayNotificationController.Show($"Хвилю очищено: +{essenceReward} есенції");
     }
 }

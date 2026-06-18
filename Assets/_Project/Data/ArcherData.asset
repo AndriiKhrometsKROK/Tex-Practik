@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   towerName: Archer Tower
   cost: 150
-  attackRadius: 8
+  attackRadius: 4.5
   fireRate: 0.6
   projectilePrefab: {fileID: 692415703611947310, guid: c89f43a5fd9190d48b0806fed5bfa1cc, type: 3}
   towerPrefab: {fileID: 3526711531308659637, guid: aadf282beb18ada4599efe17de86d90c, type: 3}

@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   towerName: Alchemist Tower
   cost: 280
-  attackRadius: 6
+  attackRadius: 4
   fireRate: 1
   projectilePrefab: {fileID: 692415703611947310, guid: c89f43a5fd9190d48b0806fed5bfa1cc, type: 3}
   towerPrefab: {fileID: 4872229492194657930, guid: 6826c423270ff144693f015519320434, type: 3}

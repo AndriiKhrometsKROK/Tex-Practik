@@ -1,3 +1,4 @@
+// Генерує нескінченні ворожі хвилі, масштабує їх за рівнем і повідомляє GameManager про перебіг хвилі.
 using System;
 using System.Collections;
 using UnityEngine;
@@ -11,6 +12,8 @@ public class Wave
     public GameObject[] enemyPrefabs;
     public int enemyCount = 10;
     public float spawnInterval = 2f;
+    public float statMultiplier = 1f;
+    public bool spawnBothLanes;
 }
 
 [Serializable]
@@ -109,9 +112,16 @@ public class EnemySpawner : MonoBehaviour
 
     public int CurrentWaveIndex { get; private set; } = -1;
     public bool IsSpawningWave { get; private set; }
-    public bool HasRemainingWaves => waves != null && CurrentWaveIndex + 1 < waves.Length;
+    public bool HasRemainingWaves => IsFinalDistortion ||
+        CampaignProgress.SelectedLevel == CampaignProgress.FinalLevel ||
+        waves != null && waves.Length > 0;
+    public bool IsFinalDistortion { get; private set; }
 
     private Coroutine _spawnCoroutine;
+    private Coroutine _finalDistortionCoroutine;
+    private int _spawnSequence;
+    private Wave _activeWave;
+    public CampaignLevelRule ActiveLevelRule { get; private set; }
 
     private void Awake()
     {
@@ -141,29 +151,27 @@ public class EnemySpawner : MonoBehaviour
     {
         if (IsSpawningWave) return;
         if (GameManager.Instance != null && !GameManager.Instance.CanStartNextWave()) return;
+        if (CampaignProgress.SelectedLevel == CampaignProgress.FinalLevel)
+        {
+            StartFinalDistortion();
+            return;
+        }
 
         if (waves == null || waves.Length == 0)
         {
             Debug.LogWarning("No waves configured on EnemySpawner.");
-            GameManager.Instance?.SetVictory();
             UpdateStartWaveButton();
             return;
         }
 
         int nextWaveIndex = CurrentWaveIndex + 1;
-        if (nextWaveIndex >= waves.Length)
-        {
-            GameManager.Instance?.SetVictory();
-            UpdateStartWaveButton();
-            return;
-        }
-
         CurrentWaveIndex = nextWaveIndex;
-        Wave wave = waves[CurrentWaveIndex];
+        Wave wave = waves[Mathf.Abs(CurrentWaveIndex) % waves.Length];
+        _activeWave = wave;
         IsSpawningWave = true;
         UpdateStartWaveButton();
 
-        GameManager.Instance?.BeginWave(CurrentWaveIndex + 1, waves.Length, GetEnemyCount(wave));
+        GameManager.Instance?.BeginWave(CurrentWaveIndex + 1, 0, GetEnemyCount(wave));
         _spawnCoroutine = StartCoroutine(SpawnWaveRoutine(wave));
     }
 
@@ -185,18 +193,38 @@ public class EnemySpawner : MonoBehaviour
         UpdateStartWaveButton();
     }
 
-    public void ConfigureMvpWaves()
+    public void StopAllSpawning()
     {
-        if (waves == null || waves.Length < 3) return;
-
-        SetEnemyCount(waves[0], 0, 4);
-        SetEnemyCount(waves[1], 0, 3);
-        SetEnemyCount(waves[1], 1, 2);
-        SetEnemyCount(waves[2], 0, 4);
-        SetEnemyCount(waves[2], 1, 3);
-        SetEnemyCount(waves[2], 2, 1);
+        if (_spawnCoroutine != null)
+        {
+            StopCoroutine(_spawnCoroutine);
+            _spawnCoroutine = null;
+        }
+        if (_finalDistortionCoroutine != null)
+        {
+            StopCoroutine(_finalDistortionCoroutine);
+            _finalDistortionCoroutine = null;
+        }
+        IsSpawningWave = false;
+        IsFinalDistortion = false;
+        UpdateStartWaveButton();
     }
 
+    public void ConfigureMvpWaves()
+    {
+        ConfigureCampaignWaves();
+    }
+
+    public void ConfigureCampaignWaves()
+    {
+        ActiveLevelRule = CampaignLevelRules.Get(CampaignProgress.SelectedLevel);
+        if (CampaignProgress.SelectedLevel != CampaignProgress.FinalLevel)
+        {
+            waves = CampaignLevelRules.BuildWaves(CampaignProgress.SelectedLevel);
+        }
+    }
+
+    // Конфігурації всередині хвилі можуть мати власну затримку та інтервал, тому спавн виконується корутиною.
     private IEnumerator SpawnWaveRoutine(Wave wave)
     {
         if (HasConfiguredEnemies(wave))
@@ -225,7 +253,7 @@ public class EnemySpawner : MonoBehaviour
         {
             for (int i = 0; i < wave.enemyCount; i++)
             {
-                SpawnEnemyAndRegister(GetRandomEnemyForWave(wave));
+                SpawnEnemyAndRegister(GetRandomEnemyForWave(wave), GetWaveSpawnMultiplier(wave));
 
                 if (i < wave.enemyCount - 1)
                 {
@@ -235,6 +263,7 @@ public class EnemySpawner : MonoBehaviour
         }
 
         IsSpawningWave = false;
+        _activeWave = null;
         _spawnCoroutine = null;
         GameManager.Instance?.FinishWaveSpawning();
         UpdateStartWaveButton();
@@ -248,10 +277,10 @@ public class EnemySpawner : MonoBehaviour
             prefab = Resources.Load<GameObject>(enemyConfig.resourcePath);
         }
 
-        SpawnEnemyAndRegister(prefab);
+        SpawnEnemyAndRegister(prefab, GetWaveSpawnMultiplier(_activeWave));
     }
 
-    private void SpawnEnemyAndRegister(GameObject prefab)
+    private void SpawnEnemyAndRegister(GameObject prefab, float statMultiplier = 1f)
     {
         GameObject spawnedEnemy = SpawnEnemy(prefab);
         if (spawnedEnemy != null)
@@ -259,7 +288,13 @@ public class EnemySpawner : MonoBehaviour
             EnemyAI enemy = spawnedEnemy.GetComponent<EnemyAI>();
             if (enemy != null)
             {
-                enemy.SetLane(BattleLane.Lower);
+                bool splitFronts = _activeWave != null && _activeWave.spawnBothLanes;
+                BattleLane lane = splitFronts || BattleFlowController.Instance != null && BattleFlowController.Instance.IsTotalWar
+                    ? (_spawnSequence++ % 2 == 0 ? BattleLane.Upper : BattleLane.Lower)
+                    : BattleLane.Lower;
+                enemy.SetLane(lane);
+                enemy.ApplyStatMultiplier(statMultiplier);
+                enemy.ApplyLevelRule(ActiveLevelRule);
             }
 
             GameManager.Instance?.RegisterEnemySpawned();
@@ -322,6 +357,7 @@ public class EnemySpawner : MonoBehaviour
         }
     }
 
+    // Якщо в сцені немає ручного списку хвиль, створюємо стабільну конфігурацію з ресурсних префабів.
     private void EnsureWaveConfig()
     {
         if (!useDefaultWavesIfEmpty) return;
@@ -375,6 +411,96 @@ public class EnemySpawner : MonoBehaviour
             startDelay = startDelay,
             spawnInterval = spawnInterval
         };
+    }
+
+    private void StartFinalDistortion()
+    {
+        if (IsFinalDistortion) return;
+        ActiveLevelRule = CampaignLevelRules.Get(CampaignProgress.FinalLevel);
+        IsFinalDistortion = true;
+        IsSpawningWave = true;
+        CurrentWaveIndex = CampaignProgress.FinalLevel - 1;
+        GameManager.Instance?.BeginWave(CampaignProgress.FinalLevel, CampaignProgress.FinalLevel, 0);
+        _finalDistortionCoroutine = StartCoroutine(FinalDistortionRoutine());
+        UpdateStartWaveButton();
+    }
+
+    private IEnumerator FinalDistortionRoutine()
+    {
+        float startedAt = Time.time;
+        int batch = 0;
+        while (IsFinalDistortion)
+        {
+            float elapsed = Time.time - startedAt;
+            float statMultiplier = ActiveLevelRule.StatMultiplier * (1f + Mathf.Pow(elapsed / 30f, 2f));
+            int count = 8 + batch * 2;
+            for (int i = 0; i < count && IsFinalDistortion; i++)
+            {
+                SpawnEnemyAndRegister(GetRandomFallbackEnemy(), statMultiplier);
+                yield return new WaitForSeconds(Mathf.Max(0.15f, 0.65f - batch * 0.025f));
+            }
+
+            batch++;
+            float nextBatchAt = startedAt + batch * 30f;
+            while (IsFinalDistortion && Time.time < nextBatchAt)
+            {
+                yield return null;
+            }
+        }
+        _finalDistortionCoroutine = null;
+    }
+
+    private float GetStandardSpawnMultiplier()
+    {
+        float rageMultiplier = BattleFlowController.Instance != null
+            ? BattleFlowController.Instance.GetEnemySpawnMultiplier()
+            : 1f;
+        return GetLevelBaseMultiplier() * rageMultiplier;
+    }
+
+    private float GetWaveSpawnMultiplier(Wave wave)
+    {
+        return GetStandardSpawnMultiplier() *
+            Mathf.Max(0.1f, wave != null ? wave.statMultiplier : 1f) *
+            GetEndlessCycleMultiplier();
+    }
+
+    private float GetLevelBaseMultiplier()
+    {
+        return ActiveLevelRule.Level > 0 ? ActiveLevelRule.StatMultiplier : 1f;
+    }
+
+    // Після проходження базового набору хвиль складність продовжує зростати без верхньої межі.
+    private float GetEndlessCycleMultiplier()
+    {
+        if (waves == null || waves.Length == 0 || CurrentWaveIndex < 0) return 1f;
+
+        int completedCycles = CurrentWaveIndex / Mathf.Max(1, waves.Length);
+        if (completedCycles <= 0) return 1f;
+
+        float levelPressure = ActiveLevelRule.Level > 0
+            ? Mathf.Clamp01(ActiveLevelRule.Level / (float)CampaignProgress.FinalLevel)
+            : 0.25f;
+        float perCycle = Mathf.Lerp(0.08f, 0.18f, levelPressure);
+        return 1f + completedCycles * perCycle;
+    }
+
+    public GameObject SpawnBossMinion(float statMultiplier)
+    {
+        GameObject spawnedEnemy = SpawnEnemy(GetRandomFallbackEnemy());
+        if (spawnedEnemy == null) return null;
+
+        EnemyAI enemy = spawnedEnemy.GetComponent<EnemyAI>();
+        if (enemy != null)
+        {
+            BattleLane lane = _spawnSequence++ % 2 == 0 ? BattleLane.Upper : BattleLane.Lower;
+            enemy.SetLane(lane);
+            enemy.ApplyStatMultiplier(Mathf.Max(0.1f, statMultiplier));
+            enemy.ApplyLevelRule(ActiveLevelRule);
+        }
+
+        GameManager.Instance?.RegisterEnemySpawned();
+        return spawnedEnemy;
     }
 
     private static void SetEnemyCount(Wave wave, int enemyIndex, int count)

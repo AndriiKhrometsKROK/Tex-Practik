@@ -1,3 +1,4 @@
+// Керує часом життя та періодичними ефектами заклинання у вибраній області.
 using System.Collections;
 using UnityEngine;
 

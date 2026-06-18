@@ -1,3 +1,4 @@
+// Editor-утиліта для автоматичного створення конфігурацій союзних юнітів у проєкті.
 using UnityEngine;
 using UnityEditor;
 using System.IO;

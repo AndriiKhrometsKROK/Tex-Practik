@@ -1,3 +1,4 @@
+// Повторно використовує юнітів, снаряди та ефекти замість постійного створення й видалення GameObject.
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;

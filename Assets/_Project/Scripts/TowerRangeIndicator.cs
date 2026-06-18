@@ -1,3 +1,4 @@
+// Малює коло дальності вибраної або ще не встановленої башти.
 using UnityEngine;
 
 public class TowerRangeIndicator : MonoBehaviour

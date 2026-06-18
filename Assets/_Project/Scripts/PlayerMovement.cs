@@ -1,3 +1,4 @@
+// Застарілий клавіатурний контролер руху, який збережено для сумісності зі старими сценами.
 using UnityEngine;
 
 public class PlayerMovement : MonoBehaviour

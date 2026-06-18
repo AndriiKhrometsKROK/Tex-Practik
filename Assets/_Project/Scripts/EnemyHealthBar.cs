@@ -1,3 +1,4 @@
+// Малює світову смугу здоров'я ворога й синхронізує її з поточним запасом HP.
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -6,14 +7,16 @@ public class EnemyHealthBar : MonoBehaviour
     [SerializeField] private Slider slider;
     [SerializeField] private Vector3 worldOffset = new Vector3(0f, 1.1f, 0f);
     [SerializeField] private Vector2 size = new Vector2(0.9f, 0.12f);
-    [SerializeField] private Color backgroundColor = new Color(0.08f, 0.08f, 0.08f, 0.85f);
-    [SerializeField] private Color fillColor = new Color(0.25f, 0.95f, 0.35f, 0.95f);
+    [SerializeField] private Color backgroundColor = default;
+    [SerializeField] private Color fillColor = default;
 
     private Transform _target;
     private float _maxHealth = 1f;
 
     private void Awake()
     {
+        backgroundColor = KenamUiTheme.WithAlpha(KenamUiTheme.VoidSoft, 0.9f);
+        fillColor = KenamUiTheme.Danger;
         EnsureSlider();
     }
 
@@ -88,7 +91,9 @@ public class EnemyHealthBar : MonoBehaviour
         Stretch(backgroundRect);
 
         Image background = backgroundObject.AddComponent<Image>();
-        background.color = backgroundColor;
+        background.color = backgroundColor == default
+            ? KenamUiTheme.WithAlpha(KenamUiTheme.VoidSoft, 0.9f)
+            : backgroundColor;
 
         GameObject sliderObject = new GameObject("Slider");
         sliderObject.transform.SetParent(canvas.transform, false);
@@ -113,7 +118,7 @@ public class EnemyHealthBar : MonoBehaviour
         Stretch(fillRect);
 
         Image fill = fillObject.AddComponent<Image>();
-        fill.color = fillColor;
+        fill.color = fillColor == default ? KenamUiTheme.Danger : fillColor;
 
         slider.fillRect = fillRect;
         slider.targetGraphic = fill;

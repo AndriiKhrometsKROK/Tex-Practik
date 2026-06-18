@@ -1,3 +1,4 @@
+// Editor-утиліта для підготовки Tiny Swords ассетів і заповнення VisualAssetCatalog.
 using UnityEditor;
 using UnityEngine;
 

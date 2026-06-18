@@ -1,3 +1,4 @@
+// Оновлює базовий HUD матчу та керує панелями перемоги, поразки й повернення до меню.
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -93,6 +94,7 @@ public class GameplayHUDController : MonoBehaviour
     public void BackToMainMenu()
     {
         Time.timeScale = 1f;
+        TrainingGroundState.Clear();
         SceneManager.LoadScene(mainMenuSceneName);
     }
 
@@ -119,7 +121,9 @@ public class GameplayHUDController : MonoBehaviour
 
         if (waveText != null)
         {
-            waveText.text = $"Хвиля {_currentWave} / {_totalWaves}";
+            waveText.text = _totalWaves <= 0
+                ? $"Хвиля {_currentWave} / ∞"
+                : $"Хвиля {_currentWave} / {_totalWaves}";
         }
     }
 

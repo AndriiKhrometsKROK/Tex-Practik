@@ -1,3 +1,4 @@
+// Створює резервний інтерфейс меню й матчу, якщо потрібні Canvas або контролери відсутні у сцені.
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -39,10 +40,10 @@ public static class RuntimeUiBootstrapper
         Canvas canvas = CreateCanvas("Runtime Main Menu Canvas");
         MainMenuController controller = canvas.gameObject.AddComponent<MainMenuController>();
 
-        RectTransform root = CreatePanel("Menu Root", canvas.transform, new Color(0.06f, 0.07f, 0.08f, 0.96f));
+        RectTransform root = CreatePanel("Menu Root", canvas.transform, KenamUiTheme.Panel);
         Stretch(root);
 
-        TextMeshProUGUI title = CreateText("Title", root, "KenomArch: Петля Небуття", 72f, TextAlignmentOptions.Center);
+        TextMeshProUGUI title = CreateText("Title", root, "Echoes of the Void", 72f, TextAlignmentOptions.Center);
         SetRect(title.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 150f), new Vector2(600f, 110f));
 
         Button playButton = CreateButton("Play Button", root, "Грати");
@@ -57,7 +58,7 @@ public static class RuntimeUiBootstrapper
         SetRect(exitButton.GetComponent<RectTransform>(), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -115f), new Vector2(280f, 60f));
         exitButton.onClick.AddListener(controller.Exit);
 
-        RectTransform settingsPanel = CreatePanel("Settings Panel", root, new Color(0.12f, 0.13f, 0.15f, 0.98f));
+        RectTransform settingsPanel = CreatePanel("Settings Panel", root, KenamUiTheme.PanelRaised);
         SetRect(settingsPanel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(420f, 230f));
 
         TextMeshProUGUI settingsTitle = CreateText("Settings Title", settingsPanel, "Гучність", 30f, TextAlignmentOptions.Center);
@@ -83,7 +84,7 @@ public static class RuntimeUiBootstrapper
         Canvas canvas = Object.FindAnyObjectByType<Canvas>() ?? CreateCanvas("Runtime Game UI Canvas");
         GameplayHUDController hud = canvas.gameObject.AddComponent<GameplayHUDController>();
 
-        RectTransform hudPanel = CreatePanel("Top HUD Panel", canvas.transform, new Color(0.04f, 0.05f, 0.06f, 0.84f));
+        RectTransform hudPanel = CreatePanel("Top HUD Panel", canvas.transform, KenamUiTheme.WithAlpha(KenamUiTheme.Panel, 0.84f));
         SetRect(hudPanel, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -32f), new Vector2(0f, 64f));
 
         HorizontalLayoutGroup layout = hudPanel.gameObject.AddComponent<HorizontalLayoutGroup>();
@@ -96,8 +97,8 @@ public static class RuntimeUiBootstrapper
         TextMeshProUGUI health = CreateText("Base Health Text", hudPanel, "Життя: 0 / 0", 24f, TextAlignmentOptions.Center);
         TextMeshProUGUI wave = CreateText("Wave Text", hudPanel, "Хвиля 0 / 0", 24f, TextAlignmentOptions.Right);
 
-        RectTransform victory = CreateFinalPanel(canvas.transform, "Victory Panel", "Перемога", new Color(0.05f, 0.22f, 0.12f, 0.96f), hud);
-        RectTransform gameOver = CreateFinalPanel(canvas.transform, "Game Over Panel", "Поразка", new Color(0.24f, 0.05f, 0.05f, 0.96f), hud);
+        RectTransform victory = CreateFinalPanel(canvas.transform, "Victory Panel", "Перемога", KenamUiTheme.WithAlpha(KenamUiTheme.Swamp, 0.96f), hud);
+        RectTransform gameOver = CreateFinalPanel(canvas.transform, "Game Over Panel", "Поразка", KenamUiTheme.WithAlpha(KenamUiTheme.DangerDark, 0.96f), hud);
         victory.gameObject.SetActive(false);
         gameOver.gameObject.SetActive(false);
 
@@ -137,14 +138,15 @@ public static class RuntimeUiBootstrapper
 
     private static void EnsureEventSystem()
     {
-        if (Object.FindAnyObjectByType<EventSystem>() != null) return;
-
-        GameObject eventSystem = new GameObject("EventSystem");
-        eventSystem.AddComponent<EventSystem>();
+        EventSystem existing = Object.FindAnyObjectByType<EventSystem>();
+        GameObject eventSystem = existing != null ? existing.gameObject : new GameObject("EventSystem");
+        if (existing == null) eventSystem.AddComponent<EventSystem>();
 #if ENABLE_INPUT_SYSTEM
-        eventSystem.AddComponent<InputSystemUIInputModule>();
+        if (eventSystem.GetComponent<BaseInputModule>() == null)
+            eventSystem.AddComponent<InputSystemUIInputModule>();
 #else
-        eventSystem.AddComponent<StandaloneInputModule>();
+        if (eventSystem.GetComponent<BaseInputModule>() == null)
+            eventSystem.AddComponent<StandaloneInputModule>();
 #endif
     }
 
@@ -155,6 +157,7 @@ public static class RuntimeUiBootstrapper
         RectTransform rect = panelObject.AddComponent<RectTransform>();
         Image image = panelObject.AddComponent<Image>();
         image.color = color;
+        if (color.a > 0.05f) KenamUiTheme.ApplyPanel(image, color, KenamUiTheme.PurpleMuted, 0.28f);
         return rect;
     }
 
@@ -166,10 +169,11 @@ public static class RuntimeUiBootstrapper
         text.text = value;
         text.fontSize = fontSize;
         text.alignment = alignment;
-        text.color = Color.white;
+        text.color = KenamUiTheme.Text;
         text.enableAutoSizing = true;
         text.fontSizeMin = Mathf.Min(16f, fontSize);
         text.fontSizeMax = fontSize;
+        KenamUiTheme.ApplyText(text, KenamUiTheme.Text, fontSize >= 24f);
         Stretch(text.rectTransform);
         return text;
     }
@@ -179,8 +183,10 @@ public static class RuntimeUiBootstrapper
         GameObject buttonObject = new GameObject(name);
         buttonObject.transform.SetParent(parent, false);
         Image image = buttonObject.AddComponent<Image>();
-        image.color = new Color(0.23f, 0.36f, 0.42f, 1f);
+        image.color = KenamUiTheme.PanelSoft;
         Button button = buttonObject.AddComponent<Button>();
+        button.targetGraphic = image;
+        KenamUiTheme.ApplyButton(button, KenamUiTheme.PanelSoft, KenamUiTheme.Gold);
 
         TextMeshProUGUI label = CreateText("Text", buttonObject.transform, labelText, 28f, TextAlignmentOptions.Center);
         Stretch(label.rectTransform);
@@ -193,13 +199,13 @@ public static class RuntimeUiBootstrapper
         sliderObject.transform.SetParent(parent, false);
         Slider slider = sliderObject.AddComponent<Slider>();
 
-        RectTransform background = CreatePanel("Background", sliderObject.transform, new Color(0.2f, 0.2f, 0.2f, 1f));
+        RectTransform background = CreatePanel("Background", sliderObject.transform, KenamUiTheme.Charcoal);
         Stretch(background);
 
         RectTransform fillArea = CreatePanel("Fill Area", sliderObject.transform, Color.clear);
         Stretch(fillArea);
 
-        RectTransform fill = CreatePanel("Fill", fillArea, new Color(0.36f, 0.67f, 0.51f, 1f));
+        RectTransform fill = CreatePanel("Fill", fillArea, KenamUiTheme.Mint);
         Stretch(fill);
 
         RectTransform handle = CreatePanel("Handle", sliderObject.transform, Color.white);

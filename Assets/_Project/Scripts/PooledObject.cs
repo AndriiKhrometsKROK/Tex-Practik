@@ -1,3 +1,4 @@
+// Автоматично повертає тимчасовий об'єкт до пулу після завершення його часу життя.
 using UnityEngine;
 
 public class PooledObject : MonoBehaviour

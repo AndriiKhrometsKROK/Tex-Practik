@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   towerName: Basic Tower
   cost: 100
-  attackRadius: 5
+  attackRadius: 3.5
   fireRate: 1
   projectilePrefab: {fileID: 692415703611947310, guid: c89f43a5fd9190d48b0806fed5bfa1cc, type: 3}
   towerPrefab: {fileID: 7076268526458537737, guid: d435108e742558c43948e833f5139580, type: 3}

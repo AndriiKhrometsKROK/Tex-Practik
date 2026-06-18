@@ -1,9 +1,12 @@
+// Керує вибором, попереднім переглядом, розміщенням, продажем і покращенням башт у дозволених слотах.
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 public class TowerPlacementManager : MonoBehaviour
 {
+    private const float PlacedTowerScale = 0.33f;
+
     public static TowerPlacementManager Instance { get; private set; }
 
     [Header("Build Settings")]
@@ -16,8 +19,8 @@ public class TowerPlacementManager : MonoBehaviour
     [SerializeField] private Vector2 towerMenuScreenOffset = new Vector2(0f, 80f);
 
     [Header("Range Indicator")]
-    [SerializeField] private Color buildRangeColor = new Color(0.35f, 0.85f, 1f, 0.75f);
-    [SerializeField] private Color selectedRangeColor = new Color(1f, 0.9f, 0.25f, 0.85f);
+    [SerializeField] private Color buildRangeColor = default;
+    [SerializeField] private Color selectedRangeColor = default;
 
     private TowerData _towerToBuild;
     private GameObject _ghostTower;
@@ -36,8 +39,12 @@ public class TowerPlacementManager : MonoBehaviour
     {
         if (Instance == null) Instance = this;
         else Destroy(gameObject);
+
+        if (buildRangeColor == default) buildRangeColor = KenamUiTheme.WithAlpha(KenamUiTheme.Mint, 0.75f);
+        if (selectedRangeColor == default) selectedRangeColor = KenamUiTheme.WithAlpha(KenamUiTheme.Gold, 0.85f);
     }
 
+    // Привид башти не бере участі в бою й не має колайдерів, доки гравець не підтвердить позицію.
     public void SelectTowerToBuild(TowerData towerData)
     {
         CloseTowerMenu();
@@ -48,6 +55,7 @@ public class TowerPlacementManager : MonoBehaviour
         if (_towerToBuild != null && _towerToBuild.towerPrefab != null)
         {
             _ghostTower = Instantiate(_towerToBuild.towerPrefab);
+            _ghostTower.transform.localScale = Vector3.one * PlacedTowerScale;
             EnsureRangeIndicator();
 
             if (_ghostTower.TryGetComponent<TowerController>(out var tc)) tc.enabled = false;
@@ -55,7 +63,8 @@ public class TowerPlacementManager : MonoBehaviour
             Collider2D[] colliders = _ghostTower.GetComponentsInChildren<Collider2D>();
             foreach (var col in colliders) col.enabled = false;
 
-            _ghostRenderer = _ghostTower.GetComponent<SpriteRenderer>();
+            _ghostRenderer = RuntimeTowerVisuals.ApplyIfKnown(_ghostTower, _towerToBuild);
+            if (_ghostRenderer == null) _ghostRenderer = _ghostTower.GetComponent<SpriteRenderer>();
             if (_ghostRenderer == null) _ghostRenderer = _ghostTower.GetComponentInChildren<SpriteRenderer>();
         }
     }
@@ -94,8 +103,8 @@ public class TowerPlacementManager : MonoBehaviour
         if (_ghostRenderer != null)
         {
             _ghostRenderer.color = canBuild
-                ? new Color(0.5f, 1f, 0.5f, 0.7f)
-                : new Color(1f, 0.3f, 0.3f, 0.7f);
+                ? KenamUiTheme.WithAlpha(KenamUiTheme.Mint, 0.72f)
+                : KenamUiTheme.WithAlpha(KenamUiTheme.Danger, 0.72f);
         }
 
         if (Input.GetMouseButtonDown(0) && canBuild)
@@ -114,10 +123,12 @@ public class TowerPlacementManager : MonoBehaviour
         if (GameManager.Instance.SpendGold(_towerToBuild.cost))
         {
             GameObject newTower = Instantiate(_towerToBuild.towerPrefab, position, Quaternion.identity);
+            newTower.transform.localScale = Vector3.one * PlacedTowerScale;
 
             if (newTower.TryGetComponent<TowerController>(out var tc))
             {
                 tc.data = _towerToBuild;
+                tc.RefreshRuntimeVisual();
             }
 
             Debug.Log($"Tower built: {_towerToBuild.towerName}");
@@ -130,9 +141,10 @@ public class TowerPlacementManager : MonoBehaviour
         }
     }
 
+    // Будувати можна лише біля заздалегідь визначених фундаментів правої захисної лінії.
     private bool IsInsideBuildZone(Vector2 position)
     {
-        float[] slotColumns = { 1f, 5f, 7f };
+        float[] slotColumns = { 5f, 7f };
         float[] slotRows = { -3f, -1f, 1f, 3f };
         foreach (float x in slotColumns)
         {
@@ -256,6 +268,7 @@ public class TowerPlacementManager : MonoBehaviour
         Destroy(towerObject);
     }
 
+    // Покращення замінює дані башти на наступний рівень, але зберігає сам GameObject і його позицію.
     private void UpgradeSelectedTower()
     {
         if (_selectedTower == null || _selectedTower.data == null) return;
@@ -267,8 +280,29 @@ public class TowerPlacementManager : MonoBehaviour
         int upgradeCost = GetUpgradeCost(currentData);
         if (!GameManager.Instance.SpendGold(upgradeCost)) return;
 
+        upgradedData.towerLevel = Mathf.Max(upgradedData.towerLevel, currentData.towerLevel + 1);
+        if (upgradedData.archetype == TowerArchetype.Generic) upgradedData.archetype = currentData.archetype;
+        if (upgradedData.archetype == TowerArchetype.SentinelPylon)
+        {
+            upgradedData.damageFamily = DamageFamily.Physical;
+            upgradedData.damageModifier = DamageModifier.Piercing;
+        }
+        else if (upgradedData.archetype == TowerArchetype.LightObelisk)
+        {
+            upgradedData.damageFamily = DamageFamily.Magical;
+            upgradedData.damageModifier = DamageModifier.Light;
+            upgradedData.isMagic = true;
+        }
+        else if (upgradedData.archetype == TowerArchetype.DistortionPrism)
+        {
+            upgradedData.damageFamily = upgradedData.towerLevel >= 3 ? DamageFamily.Chaos : DamageFamily.Hybrid;
+            upgradedData.damageModifier = upgradedData.towerLevel >= 3 ? DamageModifier.Chaos : DamageModifier.Mixed;
+            if (upgradedData.towerLevel >= 2) upgradedData.slowFactor = 0.85f;
+        }
+
         _selectedTower.data = upgradedData;
         ApplyUpgradedTowerVisuals(_selectedTower, upgradedData);
+        _selectedTower.RefreshRuntimeVisual();
         RefreshTowerMenu();
         ShowRange(_selectedTower.transform.position, upgradedData.attackRadius, selectedRangeColor);
     }
@@ -284,6 +318,7 @@ public class TowerPlacementManager : MonoBehaviour
     private void ApplyUpgradedTowerVisuals(TowerController tower, TowerData upgradedData)
     {
         if (tower == null || upgradedData == null || upgradedData.towerPrefab == null) return;
+        if (RuntimeTowerVisuals.IsArcherTower(tower.gameObject, upgradedData)) return;
 
         SpriteRenderer sourceRenderer = upgradedData.towerPrefab.GetComponentInChildren<SpriteRenderer>();
         SpriteRenderer targetRenderer = tower.GetComponentInChildren<SpriteRenderer>();
@@ -320,7 +355,7 @@ public class TowerPlacementManager : MonoBehaviour
         _towerMenuPanel.pivot = new Vector2(0.5f, 0f);
 
         Image panelImage = panelObject.AddComponent<Image>();
-        panelImage.color = new Color(0.08f, 0.08f, 0.08f, 0.9f);
+        KenamUiTheme.ApplyPanel(panelImage, KenamUiTheme.PanelRaised, KenamUiTheme.Gold);
 
         VerticalLayoutGroup layout = panelObject.AddComponent<VerticalLayoutGroup>();
         layout.padding = new RectOffset(8, 8, 8, 8);
@@ -339,10 +374,11 @@ public class TowerPlacementManager : MonoBehaviour
         buttonObject.transform.SetParent(parent, false);
 
         Image buttonImage = buttonObject.AddComponent<Image>();
-        buttonImage.color = new Color(0.2f, 0.2f, 0.2f, 1f);
+        buttonImage.color = KenamUiTheme.PanelSoft;
 
         Button button = buttonObject.AddComponent<Button>();
         button.onClick.AddListener(onClick);
+        KenamUiTheme.ApplyButton(button, KenamUiTheme.PanelSoft, KenamUiTheme.Purple);
 
         GameObject textObject = new GameObject("Text");
         textObject.transform.SetParent(buttonObject.transform, false);
@@ -355,7 +391,7 @@ public class TowerPlacementManager : MonoBehaviour
 
         label = textObject.AddComponent<Text>();
         label.alignment = TextAnchor.MiddleCenter;
-        label.color = Color.white;
+        label.color = KenamUiTheme.Text;
         label.fontSize = 15;
         label.resizeTextForBestFit = true;
         label.resizeTextMinSize = 10;

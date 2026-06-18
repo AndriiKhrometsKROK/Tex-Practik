@@ -1,3 +1,4 @@
+// Editor-майстер, який створює базові сцени меню й HUD та додає їх до Build Settings.
 #if UNITY_EDITOR
 using System.Collections.Generic;
 using TMPro;
@@ -17,7 +18,7 @@ public static class ProjectUiSetup
     private const string MainMenuScenePath = "Assets/Scenes/MainMenu.unity";
     private const string GameScenePath = "Assets/Scenes/Ігрова сцена.unity";
 
-    [MenuItem("KenomArch/Setup Menu And HUD")]
+    [MenuItem("Echoes of the Void/Setup Menu And HUD")]
     public static void SetupAll()
     {
         CreateMainMenuScene();
@@ -44,7 +45,7 @@ public static class ProjectUiSetup
         RectTransform root = CreatePanel("Menu Root", canvas.transform, new Color(0.06f, 0.07f, 0.08f, 0.94f));
         Stretch(root);
 
-        TextMeshProUGUI title = CreateText("Title", root, "KenomArch: Петля Небуття", 72, TextAlignmentOptions.Center);
+        TextMeshProUGUI title = CreateText("Title", root, "Echoes of the Void", 72, TextAlignmentOptions.Center);
         SetRect(title.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 160f), new Vector2(600f, 110f));
 
         Button playButton = CreateButton("Play Button", root, "Грати");

@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   towerName: Ice Tower
   cost: 200
-  attackRadius: 5
+  attackRadius: 3.5
   fireRate: 0.8
   projectilePrefab: {fileID: 692415703611947310, guid: c89f43a5fd9190d48b0806fed5bfa1cc, type: 3}
   towerPrefab: {fileID: 7752515690850202572, guid: 9a6a3689f4390364c9e56a15b3db6475, type: 3}

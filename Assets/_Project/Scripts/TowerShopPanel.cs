@@ -1,3 +1,4 @@
+// Створює список доступних башт у панелі оборонних споруд.
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;

@@ -1,3 +1,4 @@
+// Керує ворожим юнітом: рухом по маршруту, пошуком союзників, атаками, опорами та ефектами стану.
 using System.Collections;
 using UnityEngine;
 
@@ -16,34 +17,59 @@ public class EnemyAI : MonoBehaviour
     private Coroutine _slowCoroutine;
     private Coroutine _poisonCoroutine;
     private Coroutine _barrierWaitCoroutine;
-    private Transform _targetWaypoint;
+    private int _slowStacks;
     private int _waypointIndex;
     private EnemyHealthBar _healthBar;
     private bool _isDead;
     private float _nextAllyScanTime;
     private AllyController _allyTarget;
     private float _laneX;
+    private BattleLane _lane = BattleLane.Lower;
+    private float _statMultiplier = 1f;
+    private float _runtimeArmorBonus;
+    private float _runtimeMagicResistanceBonus;
+    private float _attackSpeedMultiplier = 1f;
+    private float _itemResistanceReduction;
+    private float _itemDebuffUntil;
+    private bool _removedWithoutReward;
 
     public UnitMovementState CurrentMovementState { get; private set; } = UnitMovementState.Moving;
+    public UnitBrainState BrainState { get; private set; } = UnitBrainState.Move;
     public bool IsAlive => !_isDead && gameObject.activeInHierarchy;
+    public float CurrentHealth => _currentHp;
+    public float MaxHealth => GetMaxHealth();
 
     public void SetLane(BattleLane lane)
     {
+        _lane = lane;
         _laneX = BattleLaneUtility.GetX(lane);
         Vector3 position = transform.position;
-        position.x = _laneX;
+        position.x = BattleLaneUtility.GetPathPoint(lane, 0).x;
+        position.y = BattleLaneUtility.GetPathPoint(lane, 0).y;
         transform.position = position;
-        transform.localScale = Vector3.one * 0.72f;
+        _waypointIndex = 0;
+        transform.localScale = Vector3.one * 3.06f;
 
         int sortingOrder = lane == BattleLane.Upper ? 8 : 11;
         foreach (SpriteRenderer renderer in GetComponentsInChildren<SpriteRenderer>())
         {
             renderer.sortingOrder = sortingOrder;
         }
+        RuntimeCharacterVisuals.Apply(gameObject, RuntimeCharacterSkin.EnemyOrc, sortingOrder);
     }
 
     private void OnEnable()
     {
+        CombatRegistry.Register(this);
+        _statMultiplier = 1f;
+        _runtimeArmorBonus = 0f;
+        _runtimeMagicResistanceBonus = 0f;
+        _attackSpeedMultiplier = 1f;
+        _itemResistanceReduction = 0f;
+        _itemDebuffUntil = 0f;
+        _slowStacks = 0;
+        _removedWithoutReward = false;
+        GetComponent<EntropyStatus>()?.ResetStacks();
         if (_slowCoroutine != null)
         {
             StopCoroutine(_slowCoroutine);
@@ -66,6 +92,7 @@ public class EnemyAI : MonoBehaviour
             _allyTarget = null;
             _nextAllyScanTime = 0f;
             CurrentMovementState = UnitMovementState.Moving;
+            SetBrainState(UnitBrainState.Move);
         }
         else
         {
@@ -78,19 +105,10 @@ public class EnemyAI : MonoBehaviour
             _allyTarget = null;
             _nextAllyScanTime = 0f;
             CurrentMovementState = UnitMovementState.Moving;
+            SetBrainState(UnitBrainState.Move);
         }
 
-        if (Waypoints.points != null && Waypoints.points.Length > 0)
-        {
-            _targetWaypoint = Waypoints.points[0];
-            _waypointIndex = 0;
-        }
-        else
-        {
-            Debug.LogError("Waypoints not found. Add a Waypoints object to the scene.");
-            _targetWaypoint = null;
-            _waypointIndex = 0;
-        }
+        _waypointIndex = 0;
 
         EnsureHealthBar();
         _healthBar?.Attach(transform, GetMaxHealth(), _currentHp);
@@ -98,6 +116,7 @@ public class EnemyAI : MonoBehaviour
 
     private void OnDisable()
     {
+        CombatRegistry.Unregister(this);
         if (_slowCoroutine != null)
         {
             StopCoroutine(_slowCoroutine);
@@ -117,6 +136,7 @@ public class EnemyAI : MonoBehaviour
         }
 
         CurrentMovementState = UnitMovementState.Moving;
+        if (!_isDead) SetBrainState(UnitBrainState.Move);
         _allyTarget = null;
         if (_healthBar != null)
         {
@@ -139,34 +159,65 @@ public class EnemyAI : MonoBehaviour
         if (GameManager.Instance != null && !GameManager.Instance.IsGameActive) return;
         if (CurrentMovementState == UnitMovementState.Wait) return;
 
+        SetBrainState(UnitBrainState.Search);
         RefreshAllyTarget();
         if (CanAttackAlly())
         {
+            SetBrainState(UnitBrainState.Attack);
             AttackAlly();
             return;
         }
 
         _allyTarget = null;
+        SetBrainState(UnitBrainState.Move);
         MoveAlongPath();
     }
 
-    public void TakeDamage(float amount, bool isMagicDamage = false)
+    public float TakeDamage(float amount, bool isMagicDamage = false)
     {
-        if (_isDead) return;
-        if (data == null) return;
+        return TakeDamage(new DamagePacket(
+            amount,
+            isMagicDamage ? DamageFamily.Magical : DamageFamily.Physical,
+            DamageModifier.Default));
+    }
 
-        float finalDamage = amount;
+    public float TakeDamage(DamagePacket packet)
+    {
+        if (_isDead || data == null || packet.Amount <= 0f) return 0f;
 
-        if (isMagicDamage)
+        EntropyStatus entropy = GetComponent<EntropyStatus>();
+        if (packet.Family == DamageFamily.Chaos)
         {
-            finalDamage -= finalDamage * data.magicResistance;
-        }
-        else
-        {
-            finalDamage = Mathf.Max(1f, finalDamage - data.armor);
+            entropy = entropy ?? gameObject.AddComponent<EntropyStatus>();
+            if (entropy.AddStack(true))
+            {
+                float remaining = _currentHp;
+                ApplyHealthDamage(_currentHp);
+                return remaining;
+            }
         }
 
+        float resistanceReduction = entropy != null ? entropy.ResistanceReduction : 0f;
+        HeroInventory heroInventory = FindAnyObjectByType<HeroInventory>();
+        if (heroInventory != null && heroInventory.HasVeil &&
+            Vector2.Distance(heroInventory.transform.position, transform.position) <= 5.5f)
+        {
+            resistanceReduction += 0.25f;
+        }
+        if (heroInventory != null && heroInventory.Has(HeroItemId.Gleipnir) &&
+            Vector2.Distance(heroInventory.transform.position, transform.position) <= 5.5f)
+        {
+            resistanceReduction += 0.12f;
+        }
+        if (Time.time <= _itemDebuffUntil) resistanceReduction += _itemResistanceReduction;
+
+        float finalDamage = CombatResolver.Resolve(
+            packet,
+            data.armor * Mathf.Sqrt(_statMultiplier) + _runtimeArmorBonus,
+            Mathf.Clamp01(data.magicResistance + _runtimeMagicResistanceBonus),
+            resistanceReduction);
         ApplyHealthDamage(finalDamage);
+        return finalDamage;
     }
 
     public void ApplySlow(float slowFactor, float duration)
@@ -178,7 +229,9 @@ public class EnemyAI : MonoBehaviour
             StopCoroutine(_slowCoroutine);
         }
 
-        _slowCoroutine = StartCoroutine(SlowRoutine(Mathf.Clamp01(slowFactor), duration));
+        _slowStacks = Mathf.Min(3, _slowStacks + 1);
+        float stackedFactor = Mathf.Pow(Mathf.Clamp01(slowFactor), _slowStacks);
+        _slowCoroutine = StartCoroutine(SlowRoutine(stackedFactor, duration));
     }
 
     public void ApplyPoison(float damagePerTick, float duration, float tickInterval = 1f)
@@ -203,17 +256,77 @@ public class EnemyAI : MonoBehaviour
         _barrierWaitCoroutine = StartCoroutine(BarrierWaitRoutine(duration));
     }
 
+    public void ApplyRoot(float duration)
+    {
+        WaitAtBarrier(duration);
+    }
+
+    public void ApplyItemResistanceDebuff(float reduction, float duration)
+    {
+        _itemResistanceReduction = Mathf.Max(_itemResistanceReduction, Mathf.Clamp01(reduction));
+        _itemDebuffUntil = Mathf.Max(_itemDebuffUntil, Time.time + Mathf.Max(0.1f, duration));
+    }
+
+    public void ApplyStatMultiplier(float multiplier)
+    {
+        multiplier = Mathf.Max(0.1f, multiplier);
+        float previousMax = GetMaxHealth();
+        float healthRatio = previousMax > 0f ? _currentHp / previousMax : 1f;
+        _statMultiplier = multiplier;
+        _baseMoveSpeed = data != null ? data.moveSpeed * Mathf.Sqrt(multiplier) : _baseMoveSpeed;
+        _currentMoveSpeed = _baseMoveSpeed;
+        _currentHp = GetMaxHealth() * healthRatio;
+        _healthBar?.Attach(transform, GetMaxHealth(), _currentHp);
+    }
+
+    public void ApplyLevelRule(CampaignLevelRule rule)
+    {
+        if (rule.Mutators.HasFlag(LevelMutator.Armored))
+        {
+            _runtimeArmorBonus += 4f + rule.Level * 0.35f;
+        }
+
+        if (rule.Mutators.HasFlag(LevelMutator.MagicWard))
+        {
+            _runtimeMagicResistanceBonus += Mathf.Min(0.35f, 0.08f + rule.Level * 0.008f);
+        }
+
+        if (rule.Mutators.HasFlag(LevelMutator.Haste))
+        {
+            _baseMoveSpeed *= 1.2f;
+            _currentMoveSpeed = _baseMoveSpeed;
+            _attackSpeedMultiplier *= 1.22f;
+        }
+
+        if (rule.Mutators.HasFlag(LevelMutator.Elite))
+        {
+            ApplyStatMultiplier(_statMultiplier * 1.12f);
+            _runtimeArmorBonus += 3f;
+            _attackSpeedMultiplier *= 1.1f;
+        }
+    }
+
+    public void RemoveWithoutReward()
+    {
+        if (_isDead || _removedWithoutReward) return;
+        _removedWithoutReward = true;
+        _isDead = true;
+        SetBrainState(UnitBrainState.Dead);
+        GameManager.Instance?.RegisterEnemyRemovedWithoutReward();
+        ObjectPoolManager.Return(gameObject);
+    }
+
     private void MoveAlongPath()
     {
-        if (_targetWaypoint == null) return;
+        Vector2 destination = BattleLaneUtility.GetPathPoint(_lane, _waypointIndex);
 
         transform.position = Vector2.MoveTowards(
             transform.position,
-            new Vector2(_laneX, _targetWaypoint.position.y),
+            destination,
             _currentMoveSpeed * Time.deltaTime
         );
 
-        if (Vector2.Distance(transform.position, new Vector2(_laneX, _targetWaypoint.position.y)) <= 0.1f)
+        if (Vector2.Distance(transform.position, destination) <= 0.1f)
         {
             GetNextWaypoint();
         }
@@ -221,21 +334,29 @@ public class EnemyAI : MonoBehaviour
 
     private void GetNextWaypoint()
     {
-        if (_waypointIndex >= Waypoints.points.Length - 1)
+        if (_waypointIndex >= BattleLaneUtility.PathLength - 1)
         {
             ReachBase();
             return;
         }
 
         _waypointIndex++;
-        _targetWaypoint = Waypoints.points[_waypointIndex];
     }
 
     private void ReachBase()
     {
         if (GameManager.Instance != null)
         {
-            GameManager.Instance.EnemyReachedBase(data);
+            bool intercepted = BattleFlowController.Instance != null &&
+                BattleFlowController.Instance.HandleEnemyReachedDefense(data, _statMultiplier);
+            if (intercepted)
+            {
+                GameManager.Instance.RegisterEnemyRemovedWithoutReward();
+            }
+            else
+            {
+                GameManager.Instance.EnemyReachedBase(data, _statMultiplier);
+            }
         }
 
         Debug.Log(gameObject.name + " reached the base.");
@@ -246,6 +367,7 @@ public class EnemyAI : MonoBehaviour
     {
         if (_isDead) return;
         _isDead = true;
+        SetBrainState(UnitBrainState.Dead);
 
         if (GameManager.Instance != null)
         {
@@ -262,9 +384,13 @@ public class EnemyAI : MonoBehaviour
 
         if (other.CompareTag("Player") && Time.time >= _nextAttackTime)
         {
-            float randomDamage = Random.Range(data.minDamage, data.maxDamage);
-            other.GetComponent<PlayerHealth>()?.TakeDamage(randomDamage);
-            _nextAttackTime = Time.time + data.attackRate;
+            float randomDamage = Random.Range(data.minDamage, data.maxDamage) * _statMultiplier;
+            other.GetComponent<PlayerHealth>()?.TakeDamage(new DamagePacket(
+                randomDamage,
+                DamageFamily.Physical,
+                DamageModifier.Default,
+                gameObject));
+            _nextAttackTime = Time.time + GetAttackInterval();
         }
     }
 
@@ -278,16 +404,15 @@ public class EnemyAI : MonoBehaviour
 
     private AllyController FindNearestAlly()
     {
-        Collider2D[] hits = Physics2D.OverlapCircleAll(transform.position, allyAttackRange);
         AllyController nearest = null;
         float nearestDistance = float.MaxValue;
 
-        foreach (Collider2D hit in hits)
+        foreach (AllyController ally in CombatRegistry.ActiveAllies)
         {
-            AllyController ally = hit.GetComponentInParent<AllyController>();
-            if (ally == null || !ally.IsAlive) continue;
+            if (ally == null || !ally.IsAlive || ally.IsUndyingAuraActive) continue;
 
             float distance = ((Vector2)ally.transform.position - (Vector2)transform.position).sqrMagnitude;
+            if (distance > allyAttackRange * allyAttackRange) continue;
             if (distance >= nearestDistance) continue;
 
             nearest = ally;
@@ -302,6 +427,7 @@ public class EnemyAI : MonoBehaviour
         return _allyTarget != null &&
             _allyTarget.isActiveAndEnabled &&
             _allyTarget.IsAlive &&
+            !_allyTarget.IsUndyingAuraActive &&
             Vector2.Distance(transform.position, _allyTarget.transform.position) <= allyAttackRange;
     }
 
@@ -311,8 +437,12 @@ public class EnemyAI : MonoBehaviour
 
         float minimum = Mathf.Max(1f, data.minDamage);
         float maximum = Mathf.Max(minimum, data.maxDamage);
-        _allyTarget.TakeDamage(Random.Range(minimum, maximum), false);
-        _nextAttackTime = Time.time + Mathf.Max(0.15f, data.attackRate);
+        _allyTarget.TakeDamage(new DamagePacket(
+            Random.Range(minimum, maximum) * _statMultiplier,
+            DamageFamily.Physical,
+            DamageModifier.Default,
+            gameObject));
+        _nextAttackTime = Time.time + GetAttackInterval();
     }
 
     private IEnumerator SlowRoutine(float slowFactor, float duration)
@@ -321,6 +451,7 @@ public class EnemyAI : MonoBehaviour
         yield return new WaitForSeconds(duration);
 
         _currentMoveSpeed = _baseMoveSpeed;
+        _slowStacks = 0;
         _slowCoroutine = null;
     }
 
@@ -342,9 +473,11 @@ public class EnemyAI : MonoBehaviour
     private IEnumerator BarrierWaitRoutine(float duration)
     {
         CurrentMovementState = UnitMovementState.Wait;
+        SetBrainState(UnitBrainState.Wait);
         yield return new WaitForSeconds(duration);
 
         CurrentMovementState = UnitMovementState.Moving;
+        SetBrainState(UnitBrainState.Move);
         _barrierWaitCoroutine = null;
     }
 
@@ -384,6 +517,16 @@ public class EnemyAI : MonoBehaviour
 
     private float GetMaxHealth()
     {
-        return data != null ? data.maxHp : 100f;
+        return data != null ? data.maxHp * _statMultiplier : 100f * _statMultiplier;
+    }
+
+    private float GetAttackInterval()
+    {
+        return Mathf.Max(0.15f, data.attackRate / (Mathf.Sqrt(_statMultiplier) * _attackSpeedMultiplier));
+    }
+
+    private void SetBrainState(UnitBrainState state)
+    {
+        BrainState = state;
     }
 }

@@ -1,3 +1,4 @@
+// Показує склад і властивості наступної ворожої хвилі до її запуску.
 using System.Text;
 using TMPro;
 using UnityEngine;
@@ -48,14 +49,17 @@ public class EnemyWavePreviewController : MonoBehaviour
             return;
         }
 
-        int index = spawner.CurrentWaveIndex + 1;
-        if (index >= spawner.waves.Length)
+        int absoluteIndex = spawner.CurrentWaveIndex + 1;
+        if (spawner.waves.Length == 0)
         {
-            previewText.text = "Це остання хвиля";
+            previewText.text = "Немає даних про хвилю";
             return;
         }
 
-        previewText.text = $"Хвиля {index + 1}\n{BuildDescription(spawner.waves[index])}\nПрава лінія • захист";
+        int templateIndex = Mathf.Abs(absoluteIndex) % spawner.waves.Length;
+        Wave nextWave = spawner.waves[templateIndex];
+        string front = nextWave.spawnBothLanes ? "Обидва фронти" : "Права лінія • захист";
+        previewText.text = $"Хвиля {absoluteIndex + 1} ∞\n{BuildDescription(nextWave)}\n{front}";
     }
 
     private static string BuildDescription(Wave wave)

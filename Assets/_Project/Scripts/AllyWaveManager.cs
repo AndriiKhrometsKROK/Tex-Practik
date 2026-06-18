@@ -1,3 +1,4 @@
+// Зберігає склад майбутньої союзної хвилі, перевіряє її вартість і передає юнітів спавнеру.
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -56,7 +57,8 @@ public class AllyWaveManager : MonoBehaviour
 
     public void SelectLane(BattleLane lane)
     {
-        SelectedLane = BattleLane.Upper;
+        SelectedLane = lane;
+        QueueChanged?.Invoke();
     }
 
     private void ReleaseQueuedWave(int waveNumber, int totalWaves)

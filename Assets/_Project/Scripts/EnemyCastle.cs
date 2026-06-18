@@ -1,3 +1,4 @@
+// Представляє замок противника, приймає шкоду та завершує рівень після його руйнування.
 using System;
 using UnityEngine;
 
@@ -15,6 +16,7 @@ public class EnemyCastle : MonoBehaviour
     private float nextAttackTime;
     private EnemyHealthBar healthBar;
     private Transform healthBarAnchor;
+    private FrontTower frontTowerProxy;
 
     public float CurrentHealth => currentHealth;
     public float MaxHealth => maxHealth;
@@ -62,6 +64,20 @@ public class EnemyCastle : MonoBehaviour
     public void TakeDamage(float amount)
     {
         if (!IsAlive || amount <= 0f) return;
+        if (BattleFlowController.Instance != null &&
+            (BattleFlowController.Instance.Phase == BattlePhase.BossBattle ||
+             BattleFlowController.Instance.Phase == BattlePhase.Finale))
+        {
+            return;
+        }
+        if (frontTowerProxy != null &&
+            frontTowerProxy.IsAlive &&
+            BattleFlowController.Instance != null &&
+            BattleFlowController.Instance.Phase == BattlePhase.SeparatedFronts)
+        {
+            frontTowerProxy.TakeDamage(amount);
+            return;
+        }
 
         currentHealth = Mathf.Max(0f, currentHealth - amount);
         HealthChanged?.Invoke(currentHealth, maxHealth);
@@ -72,6 +88,11 @@ public class EnemyCastle : MonoBehaviour
             GameManager.Instance?.SetVictory();
             gameObject.SetActive(false);
         }
+    }
+
+    public void ConfigureAsFrontTower(FrontTower tower)
+    {
+        frontTowerProxy = tower;
     }
 
     private void EnsureHealthBar()

@@ -1,3 +1,4 @@
+// Відображає в інтерфейсі чергу союзних юнітів, які вийдуть із наступною хвилею.
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
@@ -64,7 +65,9 @@ public class AllyQueueHudController : MonoBehaviour
 
         if (laneText != null && waveManager != null)
         {
-            laneText.text = "ЛІВА ЛІНІЯ • АТАКА";
+            laneText.text = waveManager.SelectedLane == BattleLane.Upper
+                ? "ЛІВА ЛІНІЯ • АТАКА"
+                : "ПРАВА ЛІНІЯ • ЗАХИСТ";
         }
 
         if (waveManager != null)

@@ -1,3 +1,4 @@
+// Зв'язує окрему кнопку магазину з TowerData та передає вибрану башту менеджеру будівництва.
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;

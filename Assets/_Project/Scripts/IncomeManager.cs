@@ -1,3 +1,4 @@
+// Нараховує пасивне золото й есенцію та повідомляє інтерфейс про зміну економіки.
 using System;
 using System.Collections;
 using UnityEngine;
@@ -11,8 +12,8 @@ public class IncomeManager : MonoBehaviour
     public event Action<int> PassiveGoldAdded;
 
     [Header("Passive Gold")]
-    [Min(0)] public int GoldPerSecond = 1;
-    [Min(0.1f)] public float incomeInterval = 10f;
+    [Min(0)] public int GoldPerSecond = 2;
+    [Min(0.1f)] public float incomeInterval = 5f;
 
     [Header("Essence")]
     [Min(0)] public int currentEssence = 100;
@@ -40,6 +41,9 @@ public class IncomeManager : MonoBehaviour
     private void Start()
     {
         ResolveGameManager();
+        int campaignLevel = CampaignProgress.SelectedLevel;
+        currentEssence = Mathf.Max(currentEssence, 100 + (campaignLevel - 1) * 5);
+        GoldPerSecond = Mathf.Max(GoldPerSecond, 2 + (campaignLevel - 1) / 7);
         EssenceChanged?.Invoke(currentEssence);
         GoldPerSecondChanged?.Invoke(GoldPerSecond);
         StartIncome();
@@ -96,11 +100,24 @@ public class IncomeManager : MonoBehaviour
         GoldPerSecondChanged?.Invoke(GoldPerSecond);
     }
 
+    public void SetEssenceForTesting(int amount)
+    {
+        currentEssence = Mathf.Max(0, amount);
+        EssenceChanged?.Invoke(currentEssence);
+    }
+
+    public void SetGoldPerSecondForTesting(int amount)
+    {
+        GoldPerSecond = Mathf.Max(0, amount);
+        GoldPerSecondChanged?.Invoke(GoldPerSecond);
+    }
+
     public bool SpendEssenceForCreepIncome(int essenceCost, int goldPerSecondIncrease)
     {
         if (!SpendEssence(essenceCost)) return false;
 
         IncreaseGoldPerSecond(goldPerSecondIncrease);
+        GameAudioController.PlaySfx(GameSfxCue.Purchase, 0.65f);
         return true;
     }
 

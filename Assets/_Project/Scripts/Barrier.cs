@@ -1,3 +1,4 @@
+// Реалізує просторовий бар'єр між фронтами та тимчасово зупиняє юнітів, які його перетинають.
 using UnityEngine;
 
 public enum UnitMovementState

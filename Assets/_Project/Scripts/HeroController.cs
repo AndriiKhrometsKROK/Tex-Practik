@@ -1,93 +1,44 @@
+// Р РµР°Р»С–Р·СѓС” MOBA-РєРµСЂСѓРІР°РЅРЅСЏ РіРµСЂРѕС”Рј РјРёС€РµСЋ С‚Р° СЂСѓС… РґРѕ РІРёР±СЂР°РЅРѕС— С‚РѕС‡РєРё РєР°СЂС‚Рё.
 using UnityEngine;
-using System.Collections.Generic;
-using TMPro;
-
-public enum Sphere { Q, W, E }
 
 public class HeroController : MonoBehaviour
 {
-    public float moveSpeed = 5f;
-    public TextMeshProUGUI spheresText;
+    [SerializeField, Min(0.1f)] private float moveSpeed = 5f;
+    [SerializeField] private Vector2 movementBounds = new Vector2(8.4f, 4.3f);
 
-    [Header("Spells")]
-    public GameObject damagePrefab; // Засунь сюда синий квадрат для теста во все слоты!
+    private Vector2 targetPosition;
+    public bool IsMoving { get; private set; }
 
-    private Vector2 _targetPos;
-    private bool _isMoving;
-    private List<Sphere> _spheres = new List<Sphere>();
-
-    void Start()
+    private void Start()
     {
-        _targetPos = transform.position;
-        UpdateUI();
+        targetPosition = transform.position;
     }
 
-    void Update()
+    private void Update()
     {
-        // Ходьба
+        if (Input.GetKeyDown(KeyCode.Space))
+        {
+            Vector3 position = transform.position;
+            position.x = Mathf.Abs(position.x - BattleLaneUtility.AttackX) <
+                Mathf.Abs(position.x - BattleLaneUtility.DefenseX)
+                ? BattleLaneUtility.DefenseX
+                : BattleLaneUtility.AttackX;
+            transform.position = position;
+            targetPosition = position;
+            IsMoving = false;
+        }
+
         if (Input.GetMouseButtonDown(1))
         {
-            _targetPos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-            _isMoving = true;
+            targetPosition = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+            targetPosition.x = Mathf.Clamp(targetPosition.x, -movementBounds.x, movementBounds.x);
+            targetPosition.y = Mathf.Clamp(targetPosition.y, -movementBounds.y, movementBounds.y);
+            IsMoving = true;
         }
 
-        // Ввод сфер
-        if (Input.GetKeyDown(KeyCode.Q)) AddSphere(Sphere.Q);
-        if (Input.GetKeyDown(KeyCode.W)) AddSphere(Sphere.W);
-        if (Input.GetKeyDown(KeyCode.E)) AddSphere(Sphere.E);
+        if (!IsMoving) return;
 
-        // Каст
-        if (Input.GetKeyDown(KeyCode.R)) CastSpell();
-
-        if (_isMoving) Move();
-    }
-
-    void Move()
-    {
-        transform.position = Vector2.MoveTowards(transform.position, _targetPos, moveSpeed * Time.deltaTime);
-        if (Vector2.Distance(transform.position, _targetPos) < 0.1f) _isMoving = false;
-    }
-
-    void AddSphere(Sphere type)
-    {
-        _spheres.Add(type);
-        if (_spheres.Count > 3) _spheres.RemoveAt(0);
-        Debug.Log("Добавлена сфера: " + type); // СМОТРИ В КОНСОЛЬ
-        UpdateUI();
-    }
-
-    void UpdateUI()
-    {
-        if (spheresText != null)
-        {
-            string s = "";
-            foreach (var sphere in _spheres) s += sphere.ToString() + " ";
-            spheresText.text = "Сферы: " + (s == "" ? "пусто" : s);
-        }
-    }
-
-    void CastSpell()
-    {
-        if (_spheres.Count < 3)
-        {
-            Debug.Log("Мало сфер для каста!");
-            return;
-        }
-
-        Debug.Log("Пытаюсь кастануть!");
-
-        // Для теста просто спавним префаб в сторону мышки
-        if (damagePrefab != null)
-        {
-            GameObject go = ObjectPoolManager.Spawn(damagePrefab, transform.position, Quaternion.identity);
-            Vector3 mousePos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-            mousePos.z = 0;
-            Vector3 dir = mousePos - transform.position;
-            float angle = Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg;
-            go.transform.rotation = Quaternion.Euler(0, 0, angle);
-        }
-
-        _spheres.Clear();
-        UpdateUI();
+        transform.position = Vector2.MoveTowards(transform.position, targetPosition, moveSpeed * Time.deltaTime);
+        if (Vector2.Distance(transform.position, targetPosition) < 0.05f) IsMoving = false;
     }
 }

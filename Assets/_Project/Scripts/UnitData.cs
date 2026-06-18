@@ -1,3 +1,4 @@
+// ScriptableObject-конфігурація юніта: здоров'я, швидкість, шкода, захист, нагорода та економічний ефект.
 using UnityEngine;
 
 [CreateAssetMenu(fileName = "NewUnitData", menuName = "TD/Unit Data")]
